@@ -1,0 +1,7 @@
+*.exe
+.vscode
+logs
+include
+aulas
+src
+lib
