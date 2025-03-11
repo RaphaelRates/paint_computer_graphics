@@ -1,63 +1,154 @@
 #include <GL/glut.h>
-#include <math.h>
+#include <stdio.h>
 
+#define MAX_SHAPES 10000
 
-void drawRectangle(float x, float y, float width, float height, float r, float g, float b) {
-    glColor3f(r, g, b);
-    glBegin(GL_QUADS);
-    glVertex2f(x, y);
-    glVertex2f(x + width, y);
-    glVertex2f(x + width, y - height);
-    glVertex2f(x, y - height);
-    glEnd();
-}
+typedef struct {
+    float x, y;
+} Point;
 
-void drawDiamond(float cx, float cy, float width, float height, float r, float g, float b) {
-    glColor3f(r, g, b);
-    glBegin(GL_POLYGON);
-    glVertex2f(cx, cy + height / 2);
-    glVertex2f(cx + width / 2, cy);
-    glVertex2f(cx, cy - height / 2);
-    glVertex2f(cx - width / 2, cy);
-    glEnd();
-}
+typedef enum { DRAW, LINE, SQUARE } Mode;
 
-void drawCircle(float cx, float cy, float r, int num_segments, float red, float green, float blue) {
-    glColor3f(red, green, blue);
-    glBegin(GL_TRIANGLE_FAN);
-    glVertex2f(cx, cy);
-    for (int i = 0; i <= num_segments; i++) {
-        float theta = 2.0f * 3.1415926f * i / num_segments;
-        float x = r * cosf(theta);
-        float y = r * sinf(theta);
-        glVertex2f(cx + x, cy + y);
-    }
-    glEnd();
-}
+typedef struct {
+    Mode type;
+    Point p1, p2;
+} Shape;
+
+Shape shapes[MAX_SHAPES];
+int shapeCount = 0;
+Mode currentMode = DRAW;
+int drawing = 0;
+Point tempP1, tempP2;
 
 void display() {
     glClear(GL_COLOR_BUFFER_BIT);
-    drawRectangle(-0.9f, 0.9f, 1.8f, 1.8f, 0.0f, 0.6f, 0.2f);
-    drawDiamond(0.0f, 0.0f, 1.2f, 0.9f, 1.0f, 0.8f, 0.0f);
-    drawCircle(0.0f, 0.0f, 0.35f, 100, 0.0f, 0.0f, 1.0f);
-    
-    glFlush();
+    glColor3f(0.0, 0.0, 0.0);  // Preto
+
+    glPointSize(3.0);
+    glBegin(GL_POINTS);
+    for (int i = 0; i < shapeCount; i++) {
+        if (shapes[i].type == DRAW) {
+            glVertex2f(shapes[i].p1.x, shapes[i].p1.y);
+        }
+    }
+    glEnd();
+
+    glBegin(GL_LINES);
+    for (int i = 0; i < shapeCount; i++) {
+        if (shapes[i].type == LINE) {
+            glVertex2f(shapes[i].p1.x, shapes[i].p1.y);
+            glVertex2f(shapes[i].p2.x, shapes[i].p2.y);
+        }
+    }
+    glEnd();
+
+    for (int i = 0; i < shapeCount; i++) {
+        if (shapes[i].type == SQUARE) {
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(shapes[i].p1.x, shapes[i].p1.y);
+            glVertex2f(shapes[i].p2.x, shapes[i].p1.y);
+            glVertex2f(shapes[i].p2.x, shapes[i].p2.y);
+            glVertex2f(shapes[i].p1.x, shapes[i].p2.y);
+            glEnd();
+        }
+    }
+
+    if (drawing) {
+        glColor3f(0.5, 0.5, 0.5);  // Cinza para pré-visualização
+
+        if (currentMode == LINE) {
+            glBegin(GL_LINES);
+            glVertex2f(tempP1.x, tempP1.y);
+            glVertex2f(tempP2.x, tempP2.y);
+            glEnd();
+        } else if (currentMode == SQUARE) {
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(tempP1.x, tempP1.y);
+            glVertex2f(tempP2.x, tempP1.y);
+            glVertex2f(tempP2.x, tempP2.y);
+            glVertex2f(tempP1.x, tempP2.y);
+            glEnd();
+        }
+    }
+
+    glutSwapBuffers();
+}
+
+void mouse(int button, int state, int x, int y) {
+    float normX = (float)x / (glutGet(GLUT_WINDOW_WIDTH) / 2.0f) - 1.0f;
+    float normY = -(float)y / (glutGet(GLUT_WINDOW_HEIGHT) / 2.0f) + 1.0f;
+
+    if (button == GLUT_LEFT_BUTTON) {
+        if (state == GLUT_DOWN) {
+            tempP1.x = normX;
+            tempP1.y = normY;
+            tempP2 = tempP1;
+            drawing = 1;
+        } else if (state == GLUT_UP && drawing) {
+            if (shapeCount < MAX_SHAPES) {
+                shapes[shapeCount].type = currentMode;
+                shapes[shapeCount].p1 = tempP1;
+                shapes[shapeCount].p2 = tempP2;
+                shapeCount++;
+            }
+            drawing = 0;
+            glutPostRedisplay();
+        }
+    }
+}
+
+void motion(int x, int y) {
+    float normX = (float)x / (glutGet(GLUT_WINDOW_WIDTH) / 2.0f) - 1.0f;
+    float normY = -(float)y / (glutGet(GLUT_WINDOW_HEIGHT) / 2.0f) + 1.0f;
+
+    if (drawing) {
+        tempP2.x = normX;
+        tempP2.y = normY;
+        glutPostRedisplay();
+    }
+
+    if (currentMode == DRAW && shapeCount < MAX_SHAPES) {
+        shapes[shapeCount].type = DRAW;
+        shapes[shapeCount].p1.x = normX;
+        shapes[shapeCount].p1.y = normY;
+        shapeCount++;
+        glutPostRedisplay();
+    }
+}
+
+void keyboard(unsigned char key, int x, int y) {
+    if (key == 'c') {
+        shapeCount = 0;
+        glutPostRedisplay();
+    } else if (key == 'l') {
+        currentMode = LINE;
+    } else if (key == 'q') {
+        currentMode = SQUARE;
+    } else if (key == 'd') {
+        currentMode = DRAW;
+    }
 }
 
 void init() {
-    glClearColor(1.0, 1.0, 1.0, 1.0);
+    glClearColor(1, 1, 1, 1); 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluOrtho2D(-1.0, 1.0, -1.0, 1.0);
+    gluOrtho2D(-1, 1, -1, 1);
 }
 
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
-    glutInitWindowSize(500, 500);
-    glutCreateWindow("Bandeira do Brasil");
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+    glutInitWindowSize(800, 600);
+    glutCreateWindow("Paint OpenGL");
+
     init();
+
     glutDisplayFunc(display);
+    glutMouseFunc(mouse);
+    glutMotionFunc(motion);
+    glutKeyboardFunc(keyboard);
+
     glutMainLoop();
     return 0;
 }
