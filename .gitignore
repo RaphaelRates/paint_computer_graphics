@@ -4,3 +4,4 @@ logs
 aulas
 src
 lib
+*.cpp

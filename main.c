@@ -1,215 +1,375 @@
 #include <GL/glut.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define MAX_POLYGON_POINTS 100
 #define MAX_SHAPES 1000
 
+/**
+ * @struct Point
+ * @property float y
+ * @property float x
+ */
 typedef struct {
     float x, y;
 } Point;
 
-typedef enum { DRAW, LINE, SQUARE, POLYGON } Mode;
-
+/**
+ * @struct Line
+ * @property Point init @details ponto inicial da linha
+ * @property Point end @details ponto final da linha
+ */
 typedef struct {
-    Mode type;
-    Point p1, p2;
-    Point* polygon;  
-    int polygonSize;
-} Shape;
+    Point init, end;
+} Line;
 
-Shape* shapes = NULL;
-int shapeCount = 0;
-Mode currentMode = DRAW;
-int drawing = 0;
-Point tempP1, tempP2;
+/**
+ * @struct Mesh
+ * @property int numberPoint @details numero de pontos no pligono
+ * @property Point vertices @details dados dos vertices/pontos do poligono
+ */
+typedef struct {
+    int numberPoints;
+    Point vertices[MAX_POLYGON_POINTS];
+} Mesh;
 
-Shape* tempPolygon;
-int polygonDrawing = 0;
+/**
+ * @enum Mode
+ * @details Define os modos de desenhos do software
+ */
+typedef enum {
+    VERTICE, LINE, POLYGON, CIRCLE
+} Mode;
 
-void initShapes() {
-    shapes = (Shape*)malloc(MAX_SHAPES * sizeof(Shape));
-    tempPolygon = (Shape*)malloc(sizeof(Shape));
-    tempPolygon->polygon = (Point*)malloc(MAX_POLYGON_POINTS * sizeof(Point));
-    tempPolygon->polygonSize = 0;
+//==================================================== VARIAVEIS ============================================================
+/**
+ * @details todos os pontos desenhados em memória
+ */
+Point *points = NULL;
+
+/**
+ * @details todos os meshes/poligonos desenhados em memória
+ */
+Mesh *meshes = NULL;
+
+
+/**
+ * @details todas as linhas desenhados em memória
+ */
+Line *lines = NULL;
+
+/**
+ * @details dados do mesh/poligono temporario 
+ */
+Mesh tempMesh;
+
+/**
+ * @details dados do ponto temporario 
+ */
+Point tempPoint;
+
+/**
+ * @details dados da linha temporaria
+ */
+Line tempLine;
+
+int pointCount = 0, lineCount = 0, meshCount = 0;
+int idDrawing = 0, isDrawingPolygon = 0, isSelected;
+
+int IdsSelectedLine = -1;
+int IdSelectedPoint = -1;
+int IdSelectedPolygon = -1;
+
+int isTranslating = 0;
+int isRotating = 0;
+int isScaling = 0;
+int isMirroring = 0;
+int isShearing = 0;
+
+Mode currentMode = VERTICE;
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ */
+void initLines();
+
+/**
+ * @details Inicia o espaço de memoria dos Pontos
+ * @return none
+ */
+void initPoints();
+
+/**
+ * @details Inicia o espaço de memoria das Poligonos
+ * @return none
+ * @
+ */
+void initPolygons();
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void display();
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void drawPoint();
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void drawLines();
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void drawPolygon();
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void drawPreviewPoint();
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void drawPreviewLine();
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void drawPreviewPolygon();
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void mouse(int button, int state, int x, int y);
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void motion(int x, int y);
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void keyboard(unsigned char key, int x, int y);
+
+/**
+ * @details Inicia o espaço de memoria das linhas
+ * @return none
+ * @
+ */
+void init();
+
+
+void initLines() {
+    if (lines == NULL) lines = (Line *)malloc(MAX_SHAPES * sizeof(Line));
 }
+
+void initPoints() {
+    if (points == NULL) points = (Point *)malloc(MAX_SHAPES * sizeof(Point));
+}
+
+void initPolygons() {
+    if(meshes == NULL) meshes = (Mesh *)malloc(MAX_SHAPES * sizeof(Mesh));
+}
+
+void drawPoint() {
+    glBegin(GL_POINTS);
+    for (int i = 0; i < pointCount; i++) {
+        glVertex2f(points[i].x, points[i].y);
+    }
+    glEnd();
+}
+
+void drawLines() {
+    glBegin(GL_LINES);
+    for (int i = 0; i < lineCount; i++) {
+        glVertex2f(lines[i].init.x, lines[i].init.y);
+        glVertex2f(lines[i].end.x, lines[i].end.y);
+    }
+    glEnd();
+}
+
+void drawPolygon() {
+    for (int i = 0; i < meshCount; i++) {
+        glBegin(GL_LINE_LOOP);
+        for (int j = 0; j < meshes[i].numberPoints; j++) {
+            glVertex2f(meshes[i].vertices[j].x, meshes[i].vertices[j].y);
+        }
+        glEnd();
+    }
+}
+
+void drawPreviewPoint() {
+    if (currentMode == VERTICE && idDrawing) {
+        glColor3f(0.8f, 1.0f, 0.4f);
+        glBegin(GL_POINTS);
+            glVertex2f(tempPoint.x, tempPoint.y);
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glEnd();
+    }
+}
+
+void drawPreviewLine() {
+    if (currentMode == LINE && idDrawing) {
+        glColor3f(0.8f, 1.0f, 0.4f);
+        glBegin(GL_LINES);
+            glVertex2f(tempLine.init.x, tempLine.init.y);
+            glVertex2f(tempLine.end.x, tempLine.end.y);
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glEnd();
+    }
+}
+
+void drawPreviewPolygon() {
+    if (isDrawingPolygon) {
+        glColor3f(0.8f, 1.0f, 0.4f);
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < tempMesh.numberPoints; i++) {
+            glVertex2f(tempMesh.vertices[i].x, tempMesh.vertices[i].y);
+        }
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glEnd();
+    }
+}
+
 
 void display() {
     glClear(GL_COLOR_BUFFER_BIT);
     glColor3f(0.0, 0.0, 0.0);
-
-    glPointSize(3.0);
-    glBegin(GL_POINTS);
-    for (int i = 0; i < shapeCount; i++) {
-        if (shapes[i].type == DRAW) {
-            glVertex2f(shapes[i].p1.x, shapes[i].p1.y);
-        }
-    }
-    glEnd();
-
-    glBegin(GL_LINES);
-    for (int i = 0; i < shapeCount; i++) {
-        if (shapes[i].type == LINE) {
-            glVertex2f(shapes[i].p1.x, shapes[i].p1.y);
-            glVertex2f(shapes[i].p2.x, shapes[i].p2.y);
-        }
-    }
-    glEnd();
-
-    for (int i = 0; i < shapeCount; i++) {
-        if (shapes[i].type == SQUARE) {
-            glBegin(GL_LINE_LOOP);
-            glVertex2f(shapes[i].p1.x, shapes[i].p1.y);
-            glVertex2f(shapes[i].p2.x, shapes[i].p1.y);
-            glVertex2f(shapes[i].p2.x, shapes[i].p2.y);
-            glVertex2f(shapes[i].p1.x, shapes[i].p2.y);
-            glEnd();
-        } else if (shapes[i].type == POLYGON) {
-            glBegin(GL_LINE_LOOP);
-            for (int j = 0; j < shapes[i].polygonSize; j++) {
-                glVertex2f(shapes[i].polygon[j].x, shapes[i].polygon[j].y);
-            }
-            glEnd();
-        }
-    }
-
-    if (drawing) {
-        glColor3f(0.5, 0.5, 0.5);
-        if (currentMode == LINE) {
-            glBegin(GL_LINES);
-            glVertex2f(tempP1.x, tempP1.y);
-            glVertex2f(tempP2.x, tempP2.y);
-            glEnd();
-        } else if (currentMode == SQUARE) {
-            glBegin(GL_LINE_LOOP);
-            glVertex2f(tempP1.x, tempP1.y);
-            glVertex2f(tempP2.x, tempP1.y);
-            glVertex2f(tempP2.x, tempP2.y);
-            glVertex2f(tempP1.x, tempP2.y);
-            glEnd();
-        }
-    }
-
-    if (polygonDrawing) {
-        glColor3f(0.5, 0.5, 0.5);
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < tempPolygon->polygonSize; i++) {
-            glVertex2f(tempPolygon->polygon[i].x, tempPolygon->polygon[i].y);
-        }
-        glVertex2f(tempP2.x, tempP2.y);
-        glEnd();
-    }
-
+    glLineWidth(2.0);
+    glPointSize(3.5);
+    drawPreviewPoint();
+    drawPreviewLine();
+    drawPreviewPolygon();
+    drawPoint();
+    drawLines();
+    drawPolygon();
     glutSwapBuffers();
 }
 
 void mouse(int button, int state, int x, int y) {
-    float normX = (float)x / (glutGet(GLUT_WINDOW_WIDTH) / 2.0f) - 1.0f;
-    float normY = -(float)y / (glutGet(GLUT_WINDOW_HEIGHT) / 2.0f) + 1.0f;
+    int normX = x;
+    int normY = 600 - y; // Inverter Y para coordenadas OpenGL
 
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        if (currentMode == DRAW) {
-            if (shapeCount < MAX_SHAPES) {
-                shapes[shapeCount].type = DRAW;
-                shapes[shapeCount].p1.x = normX;
-                shapes[shapeCount].p1.y = normY;
-                shapeCount++;
+    if (button == GLUT_LEFT_BUTTON) {
+        if (state == GLUT_DOWN) {
+            switch (currentMode) {
+                case VERTICE:
+                    points[pointCount++] = (Point){normX, normY};
+                    printf("Ponto criado: (%d, %d) - Tipo: Vertice\n", normX, normY);
+                    break;
+                case LINE:
+                    tempLine.init = (Point){normX, normY};
+                    idDrawing = 1;
+                    printf("Início da linha: (%d, %d) - Tipo: Linha\n", normX, normY);
+                    break;
+                case POLYGON:
+                    if (isDrawingPolygon && tempMesh.numberPoints < MAX_POLYGON_POINTS) {
+                        tempMesh.vertices[tempMesh.numberPoints++] = (Point){normX, normY};
+                        printf("Ponto do polígono: (%d, %d) - Tipo: Polígono\n", normX, normY);
+                    }
+                    break;
             }
-        } else if (currentMode == POLYGON) {
-            if (tempPolygon->polygonSize < MAX_POLYGON_POINTS) {
-                tempPolygon->polygon[tempPolygon->polygonSize++] = (Point){normX, normY};
-                polygonDrawing = 1;
+        } else if (state == GLUT_UP) {
+            if (currentMode == LINE && idDrawing) {
+                tempLine.end = (Point){normX, normY};
+                lines[lineCount++] = tempLine;
+                idDrawing = 0;
+                printf("Fim da linha: (%d, %d) - Tipo: Linha\n", normX, normY);
             }
-        } else {
-            tempP1.x = normX;
-            tempP1.y = normY;
-            tempP2 = tempP1;
-            drawing = 1;
-        }
-    } else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
-        if (drawing && (currentMode == LINE || currentMode == SQUARE)) {
-            if (shapeCount < MAX_SHAPES) {
-                Shape newShape = {currentMode, tempP1, tempP2, NULL, 0};
-                shapes[shapeCount++] = newShape;
-            }
-            drawing = 0;
         }
     } else if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
-        if (polygonDrawing) {
-            if (shapeCount < MAX_SHAPES) {
-                shapes[shapeCount] = *tempPolygon;
-                shapes[shapeCount].type = POLYGON;
-                shapeCount++;
-            }
-            polygonDrawing = 0;
-            tempPolygon->polygonSize = 0;
+        if (currentMode == POLYGON && isDrawingPolygon) {
+            meshes[meshCount++] = tempMesh;
+            tempMesh.numberPoints = 0;
+            isDrawingPolygon = 0;
         }
     }
     glutPostRedisplay();
 }
 
 void motion(int x, int y) {
-    float normX = (float)x / (glutGet(GLUT_WINDOW_WIDTH) / 2.0f) - 1.0f;
-    float normY = -(float)y / (glutGet(GLUT_WINDOW_HEIGHT) / 2.0f) + 1.0f;
+    int normX = x;
+    int normY = 600 - y;
 
-    if (drawing) {
-        tempP2.x = normX;
-        tempP2.y = normY;
-    } else if (polygonDrawing) {
-        tempP2.x = normX;
-        tempP2.y = normY;
+    switch (currentMode) {
+        case LINE:
+            if (idDrawing) {
+                tempLine.end = (Point){normX, normY};
+            }
+            break;
+        case POLYGON:
+            if (isDrawingPolygon && tempMesh.numberPoints < MAX_POLYGON_POINTS) {
+                tempMesh.vertices[tempMesh.numberPoints - 1] = (Point){normX, normY};
+            }
+            break;
+        default:
+            break;
     }
     glutPostRedisplay();
 }
 
 void keyboard(unsigned char key, int x, int y) {
-    if (key == 'c') {
-        free(shapes); 
-        shapes = NULL;
-        shapeCount = 0;
-        tempPolygon->polygonSize = 0;
-        polygonDrawing = 0;
-        drawing = 0;
-        glutPostRedisplay();
-    } else if (key == 'l') {
-        currentMode = LINE;
-        drawing = 0;
-        polygonDrawing = 0;
-    } else if (key == 'q') {
-        currentMode = SQUARE;
-        drawing = 0;
-        polygonDrawing = 0;
-    } else if (key == 'd') {
-        currentMode = DRAW;
-        drawing = 0;
-        polygonDrawing = 0;
-    } else if (key == 'p') {
-        currentMode = POLYGON;
-        drawing = 0;
+    switch (key) {
+        case 'p':
+            currentMode = POLYGON;
+            isDrawingPolygon = 1;
+            break;
+        case 'l':
+            currentMode = LINE;
+            break;
+        case 'v':
+            currentMode = VERTICE;
+            break;
     }
+    glutPostRedisplay();
 }
 
 void init() {
     glClearColor(1, 1, 1, 1);
     glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluOrtho2D(-1, 1, -1, 1);
+    gluOrtho2D(0, 800, 0, 600);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
     glutInitWindowSize(800, 600);
-    glutCreateWindow("Paint OpenGL");
-
-    initShapes();
+    glutCreateWindow("OpenGL Paint - Simulator");
     init();
-
+    initLines();
+    initPoints();
+    initPolygons();
     glutDisplayFunc(display);
     glutMouseFunc(mouse);
     glutMotionFunc(motion);
     glutKeyboardFunc(keyboard);
-
     glutMainLoop();
     return 0;
 }
