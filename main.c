@@ -11,6 +11,8 @@
  * @property float y
  * @property float x
  */
+float scaleX = 1.0f, scaleY = 1.0f;
+
 typedef struct {
     float x, y;
 } Point;
@@ -39,33 +41,33 @@ typedef struct {
  * @details Define os modos de desenhos do software
  */
 typedef enum {
-    VERTICE, LINE, POLYGON, CIRCLE
+    VERTICE, LINE, POLYGON, CIRCLE, SELECT
 } Mode;
 
 //==================================================== VARIAVEIS ============================================================
 /**
- * @details todos os pontos desenhados em memÃ³ria
+ * @details todos os pontos desenhados em memória
  */
 Point *points = NULL;
 
 /**
- * @details todos os meshes/poligonos desenhados em memÃ³ria
+ * @details todos os meshes/poligonos desenhados em memória
  */
 Mesh *meshes = NULL;
 
 
 /**
- * @details todas as linhas desenhados em memÃ³ria
+ * @details todas as linhas desenhados em memória
  */
 Line *lines = NULL;
 
 /**
- * @details dados do mesh/poligono temporario 
+ * @details dados do mesh/poligono temporario
  */
 Mesh tempMesh;
 
 /**
- * @details dados do ponto temporario 
+ * @details dados do ponto temporario
  */
 Point tempPoint;
 
@@ -90,96 +92,96 @@ int isShearing = 0;
 Mode currentMode = VERTICE;
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  */
 void initLines();
 
 /**
- * @details Inicia o espaÃ§o de memoria dos Pontos
+ * @details Inicia o espaço de memoria dos Pontos
  * @return none
  */
 void initPoints();
 
 /**
- * @details Inicia o espaÃ§o de memoria das Poligonos
+ * @details Inicia o espaço de memoria das Poligonos
  * @return none
  * @
  */
 void initPolygons();
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void display();
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void drawPoint();
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void drawLines();
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void drawPolygon();
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void drawPreviewPoint();
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void drawPreviewLine();
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void drawPreviewPolygon();
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void mouse(int button, int state, int x, int y);
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void motion(int x, int y);
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
 void keyboard(unsigned char key, int x, int y);
 
 /**
- * @details Inicia o espaÃ§o de memoria das linhas
+ * @details Inicia o espaço de memoria das linhas
  * @return none
  * @
  */
@@ -198,17 +200,42 @@ void initPolygons() {
     if(meshes == NULL) meshes = (Mesh *)malloc(MAX_SHAPES * sizeof(Mesh));
 }
 
+
+int selectedPointIndex = -1;  // Nenhum ponto selecionado inicialmente
+
 void drawPoint() {
+    glPointSize(5);
+
     glBegin(GL_POINTS);
     for (int i = 0; i < pointCount; i++) {
-        glVertex2f(points[i].x, points[i].y);
+        if (i == selectedPointIndex) {
+            glPushMatrix();  // Salva o estado atual da matriz de transformação
+            glTranslatef(points[i].x, points[i].y, 0);  // Translada para a posição do ponto
+            glScalef(scaleX, scaleY, 1.0f);               // Aplica o escalonamento
+            glVertex2f(0, 0);                            // Desenha o ponto na origem após a transformação
+            glPopMatrix();                               // Restaura o estado da matriz
+        } else {
+            glVertex2f(points[i].x, points[i].y);
+        }
     }
     glEnd();
 }
 
+
+
+
+
 void drawLines() {
     glBegin(GL_LINES);
     for (int i = 0; i < lineCount; i++) {
+        if (i == lineCount - 1) { // Última linha é a atual
+            glLoadIdentity(); // Reset
+            glTranslatef((lines[i].init.x + lines[i].end.x) / 2.0,
+                         (lines[i].init.y + lines[i].end.y) / 2.0, 0);
+            glScalef(scaleX, scaleY, 1.0f); // Escalonamento
+            glTranslatef(-(lines[i].init.x + lines[i].end.x) / 2.0,
+                         -(lines[i].init.y + lines[i].end.y) / 2.0, 0);
+        }
         glVertex2f(lines[i].init.x, lines[i].init.y);
         glVertex2f(lines[i].end.x, lines[i].end.y);
     }
@@ -270,6 +297,7 @@ void display() {
     drawPoint();
     drawLines();
     drawPolygon();
+    glFlush();
     glutSwapBuffers();
 }
 
@@ -287,14 +315,22 @@ void mouse(int button, int state, int x, int y) {
                 case LINE:
                     tempLine.init = (Point){normX, normY};
                     idDrawing = 1;
-                    printf("InÃ­cio da linha: (%d, %d) - Tipo: Linha\n", normX, normY);
+                    printf("Início da linha: (%d, %d) - Tipo: Linha\n", normX, normY);
                     break;
                 case POLYGON:
                     if (isDrawingPolygon && tempMesh.numberPoints < MAX_POLYGON_POINTS) {
                         tempMesh.vertices[tempMesh.numberPoints++] = (Point){normX, normY};
-                        printf("Ponto do polÃ­gono: (%d, %d) - Tipo: PolÃ­gono\n", normX, normY);
+                        printf("Ponto do polígono: (%d, %d) - Tipo: Polígono\n", normX, normY);
                     }
                     break;
+                case SELECT:
+                    for (int i = 0; i < pointCount; i++) {
+                        if (fabs(points[i].x - normX) < 10 && fabs(points[i].y - normY) < 10) {
+                            selectedPointIndex = i;  // Seleciona o ponto
+                            printf("Ponto selecionado: (%d, %d)\n", points[i].x, points[i].y);
+                            break;
+                        }
+                    }
             }
         } else if (state == GLUT_UP) {
             if (currentMode == LINE && idDrawing) {
@@ -309,6 +345,9 @@ void mouse(int button, int state, int x, int y) {
             meshes[meshCount++] = tempMesh;
             tempMesh.numberPoints = 0;
             isDrawingPolygon = 0;
+        } else if (currentMode == SELECT) {
+            selectedPointIndex = -1;  // Desmarcar a seleção
+            printf("Seleção desfeita.\n");
         }
     }
     glutPostRedisplay();
@@ -347,6 +386,22 @@ void keyboard(unsigned char key, int x, int y) {
         case 'v':
             currentMode = VERTICE;
             break;
+        case 's':
+            currentMode = SELECT;
+            break;
+    }
+    glutPostRedisplay();
+}
+
+void keyboardSpecial(int key, int x, int y) {
+    if (key == GLUT_KEY_UP) {
+        scaleX *= 1.1f;  // Aumentar o escalonamento
+        scaleY *= 1.1f;
+        printf("Escalonamento aumentado: %.2f, %.2f\n", scaleX, scaleY);
+    } else if (key == GLUT_KEY_DOWN) {
+        scaleX /= 1.1f;  // Diminuir o escalonamento
+        scaleY /= 1.1f;
+        printf("Escalonamento diminuído: %.2f, %.2f\n", scaleX, scaleY);
     }
     glutPostRedisplay();
 }
@@ -361,15 +416,27 @@ int main(int argc, char **argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
     glutInitWindowSize(800, 600);
-    glutCreateWindow("OpenGL Paint - Simulator");
-    init();
+    glutInitWindowPosition(100, 100);
+    glutCreateWindow("Editor 2D OpenGL");
+
     initLines();
     initPoints();
     initPolygons();
+
+    init();
+
     glutDisplayFunc(display);
     glutMouseFunc(mouse);
     glutMotionFunc(motion);
     glutKeyboardFunc(keyboard);
+    glutSpecialFunc(keyboardSpecial);
+
     glutMainLoop();
+
+    // Libera memória ao sair
+    free(points);
+    free(lines);
+    free(meshes);
+
     return 0;
 }
