@@ -34,6 +34,7 @@ typedef struct {
     Point vertices[MAX_POLYGON_POINTS];
 } Mesh;
 
+
 /**
  * @enum Mode
  * @details Define os modos de desenhos do software
@@ -88,6 +89,7 @@ int isMirroring = 0;
 int isShearing = 0;
 
 Mode currentMode = VERTICE;
+float colorLoading_r = 0.1f, colorLoading_g = 0.5f, colorLoading_b = 0.3f;
 
 /**
  * @details Inicia o espaço de memoria das linhas
@@ -227,7 +229,7 @@ void drawPolygon() {
 
 void drawPreviewPoint() {
     if (currentMode == VERTICE && idDrawing) {
-        glColor3f(0.8f, 1.0f, 0.4f);
+        glColor3f(colorLoading_r, colorLoading_g, colorLoading_b);
         glBegin(GL_POINTS);
             glVertex2f(tempPoint.x, tempPoint.y);
         glColor3f(0.0f, 0.0f, 0.0f);
@@ -237,7 +239,7 @@ void drawPreviewPoint() {
 
 void drawPreviewLine() {
     if (currentMode == LINE && idDrawing) {
-        glColor3f(0.8f, 1.0f, 0.4f);
+        glColor3f(colorLoading_r, colorLoading_g, colorLoading_b);
         glBegin(GL_LINES);
             glVertex2f(tempLine.init.x, tempLine.init.y);
             glVertex2f(tempLine.end.x, tempLine.end.y);
@@ -248,7 +250,7 @@ void drawPreviewLine() {
 
 void drawPreviewPolygon() {
     if (isDrawingPolygon) {
-        glColor3f(0.8f, 1.0f, 0.4f);
+        glColor3f(colorLoading_r, colorLoading_g, colorLoading_b);
         glBegin(GL_LINE_LOOP);
         for (int i = 0; i < tempMesh.numberPoints; i++) {
             glVertex2f(tempMesh.vertices[i].x, tempMesh.vertices[i].y);
@@ -275,7 +277,7 @@ void display() {
 
 void mouse(int button, int state, int x, int y) {
     int normX = x;
-    int normY = 600 - y; // Inverter Y para coordenadas OpenGL
+    int normY = 600 - y;
 
     if (button == GLUT_LEFT_BUTTON) {
         if (state == GLUT_DOWN) {
