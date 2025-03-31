@@ -1,6 +1,7 @@
 
 #include <data.h>
 #include <draw.h>
+#include <calculate.h>
 
 void drawPoint(Point *points, int pointCount,int isSelected,int IdSelectedPoint)
 {

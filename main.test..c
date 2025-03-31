@@ -2,9 +2,75 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <data.h>
-#include <arqs.c>
-#include <draw.c>
+#define MAX_POLYGON_POINTS 100
+#define MAX_SHAPES 1000
+#define CIRCLE_SEGMENTS 12
+#define POINT_RADIUS 3.0f
+#define PI 3.14159265358979323846
+#define SELECTION_THRESHOLD 10.0
+
+#define JOYSTICK_DOWN 0
+#define JOYSTICK_X 1
+#define JOYSTICK_CIRCLE 2
+#define JOYSTICK_TRIANGLE 8
+#define JOYSTICK_QUAD 4
+#define JOYSTICK_L1 16
+#define JOYSTICK_R1 32
+#define JOYSTICK_L2 64
+#define JOYSTICK_R2 128
+#define JOYSTICK_START 256
+#define JOYSTICK_L3 512
+#define JOYSTICK_OPT 1024
+#define JOYSTICK_R3 2048
+#define JOYSTICK_ICON_BUTTON 4096
+#define JOYSTICK_TOUCH 8192
+
+typedef struct
+{
+    float x, y;
+} Point;
+
+typedef struct
+{
+    Point init, end;
+} Line;
+
+typedef struct
+{
+    int numberPoints;
+    Point vertices[MAX_POLYGON_POINTS];
+} Mesh;
+
+typedef enum
+{
+    VERTICE,
+    LINE,
+    POLYGON,
+    NONE_MESH,
+    SELECTION
+} Mode;
+
+typedef enum
+{
+    SAVE_MESH,
+    LOAD_MESH,
+    DELETED,
+    NONE_MESSAGE,
+    IN_CONCERT,
+    LINE_LOG,
+    VERTCIE_LOG,
+    POLYLGON_LOG
+} MESSAGE;
+
+typedef enum
+{
+    NONE_TRANSFORMER,
+    TRANSLATE,
+    ROTATE,
+    SCALE,
+    MIRROR,
+    SHEAR
+} TransformMode;
 
 //==================================================== VARIAVEIS ============================================================
 
@@ -51,6 +117,52 @@ TransformMode currentTransform = NONE_TRANSFORMER;
 Mode currentMode = NONE_MESH;
 int joystickMode = 0;
 float colorLoading_r = 0.1f, colorLoading_g = 0.5f, colorLoading_b = 0.3f;
+
+int saveObjectsToFile(const char *filename);
+int loadObjectsFromFile(const char *filename);
+void initLines();
+void initPoints();
+void initPolygons();
+void display();
+void drawPoint();
+void drawLines();
+void drawPolygon();
+void drawPreviewPoint();
+void drawPreviewLine();
+void drawPreviewPolygon();
+void drawSelectedObject();
+void specialKeys(int key, int x, int y);
+void init();
+float distance(Point p1, Point p2);
+int selectPoint(int x, int y);
+int selectLine(int x, int y);
+int selectPolygon(int x, int y);
+void translatePoint(int id, float dx, float dy);
+void translateLine(int id, float dx, float dy);
+void translatePolygon(int id, float dx, float dy);
+void rotatePoint(int id, float angle);
+void rotateLine(int id, float angle);
+void rotatePolygon(int id, float angle);
+void scaleLine(int id, float sx, float sy);
+void scalePolygon(int id, float sx, float sy);
+void mirrorPoint(int id, int direction);
+void mirrorLine(int id, int direction);
+void mirrorPolygon(int id, int direction);
+void shearPoint(int id, float sx, float sy);
+void shearLine(int id, float sx, float sy);
+void shearPolygon(int id, float sx, float sy);
+void drawMessage();
+Point calculatePolygonCenter(Mesh m);
+Point calculateLineCenter(Line l);
+int *windowSize();
+void deleteSelectedObject();
+void hideMessage(int value);
+void mouse(int button, int state, int x, int y);
+void motion(int x, int y);
+void timer(int value);
+void passiveMotion(int x, int y);
+void keyboard(unsigned char key, int x, int y);
+Point scalePoint(Point point, Point reference, float scaleX, float scaleY);
 
 int *windowSize()
 {
@@ -109,13 +221,386 @@ void drawIconJoystick(int x, int y, int radius)
     glEnd();
 }
 
+void drawPoint()
+{
+    glPointSize(5.0);
+    glBegin(GL_POINTS);
+    for (int i = 0; i < pointCount; i++)
+    {
+        if (i == IdSelectedPoint && isSelected)
+            glColor3f(1.0f, 0.0f, 0.0f);
+        else
+            glColor3f(0.0f, 0.0f, 0.0f);
+
+        glVertex2f(points[i].x, points[i].y);
+    }
+    glEnd();
+}
+
+void drawLines()
+{
+    glLineWidth(2.0);
+    for (int i = 0; i < lineCount; i++)
+    {
+        if (i == IdSelectedLine && isSelected)
+            glColor3f(1.0f, 0.0f, 0.0f);
+        else
+            glColor3f(0.0f, 0.0f, 0.0f);
+
+        glBegin(GL_LINES);
+        glVertex2f(lines[i].init.x, lines[i].init.y);
+        glVertex2f(lines[i].end.x, lines[i].end.y);
+        glEnd();
+    }
+}
+
+void drawPolygon()
+{
+    glLineWidth(2.0);
+    for (int i = 0; i < meshCount; i++)
+    {
+        if (i == IdSelectedPolygon && isSelected)
+            glColor3f(1.0f, 0.0f, 0.0f);
+        else
+            glColor3f(0.0f, 0.0f, 0.0f);
+
+        glBegin(GL_LINE_LOOP);
+        for (int j = 0; j < meshes[i].numberPoints; j++)
+        {
+            glVertex2f(meshes[i].vertices[j].x, meshes[i].vertices[j].y);
+        }
+        glEnd();
+    }
+}
+
+void drawPreviewPoint()
+{
+    if (currentMode == VERTICE && isDrawing)
+    {
+        glColor3f(0.8f, 1.0f, 0.4f);
+        glPointSize(5.0);
+        glBegin(GL_POINTS);
+        glVertex2f(tempPoint.x, tempPoint.y);
+        glEnd();
+    }
+}
+
+void drawPreviewLine()
+{
+    if (currentMode == LINE && isDrawing)
+    {
+        glColor3f(colorLoading_r, colorLoading_g, colorLoading_b);
+        glBegin(GL_LINES);
+        glVertex2f(tempLine.init.x, tempLine.init.y);
+        glVertex2f(tempLine.end.x, tempLine.end.y);
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glEnd();
+    }
+}
+
+void drawPreviewPolygon()
+{
+    if (isDrawingPolygon)
+    {
+        glColor3f(colorLoading_r, colorLoading_g, colorLoading_b);
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < tempMesh.numberPoints; i++)
+        {
+            glVertex2f(tempMesh.vertices[i].x, tempMesh.vertices[i].y);
+        }
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glEnd();
+    }
+}
+
+void drawMessage()
+{
+    int *window = windowSize();
+    switch (showMessage)
+    {
+    case SAVE_MESH:
+        glColor3f(0, 0.7, 0);
+    case LOAD_MESH:
+        glColor3f(0.6, 0.9, 0);
+        break;
+    case DELETED:
+        glColor3f(0.8, 0.0, 0.1);
+        break;
+    default:
+        glColor3f(0.0, 0.0, 0.0);
+        break;
+    }
+    glRasterPos2f((window[0] * 3) / 7, window[1] - 20);
+
+    const char *msg;
+    switch (showMessage)
+    {
+    case LINE_LOG:
+        msg = "Desenho para Linha";
+        break;
+    case    POLYLGON_LOG:
+        msg = "Desenho para Pligono";
+        break;
+    case VERTCIE_LOG:
+        msg = "Desenho para Vertice";
+        break;
+    case SAVE_MESH:
+        msg = "Arquivo salvo com sucesso!";
+        break;
+    case LOAD_MESH:
+        msg = "Arquivo carregado com sucesso!";
+        break;
+    case DELETED:
+        msg = "Objeto deletado!";
+        break;
+    case IN_CONCERT:
+        msg = "FUncionalidade em manutencao, sentimos muito!";
+        break;
+    default:
+        msg = "PAINT - PINTA COM GL";
+        break;
+    }
+
+    for (const char *c = msg; *c != '\0'; c++)
+    {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
+    }
+}
+
+int saveObjectsToFile(const char *filename)
+{
+    FILE *file = fopen(filename, "w");
+    if (file == NULL)
+    {
+        printf("Erro ao abrir o arquivo para salvar.\n");
+        return 0;
+    }
+
+    fprintf(file, "[PONTOS]\n");
+    fprintf(file, "Cont: %d\n", pointCount);
+    for (int i = 0; i < pointCount; i++)
+    {
+        fprintf(file, "P%d: %.f, %.f\n", i, points[i].x, points[i].y);
+    }
+    fprintf(file, "\n");
+
+    fprintf(file, "[LINHAS]\n");
+    fprintf(file, "Cont: %d\n", lineCount);
+    for (int i = 0; i < lineCount; i++)
+    {
+        fprintf(file, "L%d: (%.f, %.f) -> (%.f, %.f)\n",
+                i, lines[i].init.x, lines[i].init.y,
+                lines[i].end.x, lines[i].end.y);
+    }
+    fprintf(file, "\n");
+
+    fprintf(file, "[POLIGONOS]\n");
+    fprintf(file, "Cont: %d\n", meshCount);
+    for (int i = 0; i < meshCount; i++)
+    {
+        fprintf(file, "Poligono %d - Pontas: %d\n", i, meshes[i].numberPoints);
+        for (int j = 0; j < meshes[i].numberPoints; j++)
+        {
+            fprintf(file, "  V%d: %.f, %.f\n",
+                    j, meshes[i].vertices[j].x, meshes[i].vertices[j].y);
+        }
+    }
+
+    fclose(file);
+    printf("Os objetos foram salvos no arquivo %s.\n", filename);
+    return 1;
+}
+
+int loadObjectsFromFile(const char *filename)
+{
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
+    {
+        printf("Erro ao abrir ao carregar objetos do arquivo.\n");
+        return 0;
+    }
+
+    pointCount = 0;
+    lineCount = 0;
+    meshCount = 0;
+    tempMesh.numberPoints = 0;
+
+    char line[256];
+    int currentSection = 0;
+    int currentPolygonIndex = -1;
+
+    while (fgets(line, sizeof(line), file))
+    {
+
+        line[strcspn(line, "\n")] = 0;
+        if (strlen(line) == 0)
+            continue;
+
+        if (strcmp(line, "[PONTOS]") == 0)
+        {
+            currentSection = 1;
+            continue;
+        }
+        else if (strcmp(line, "[LINHAS]") == 0)
+        {
+            currentSection = 2;
+            continue;
+        }
+        else if (strcmp(line, "[POLIGONOS]") == 0)
+        {
+            currentSection = 3;
+            continue;
+        }
+
+        switch (currentSection)
+        {
+        case 1:
+        {
+            if (strstr(line, "Cont:") != NULL)
+                continue;
+
+            float x, y;
+            if (sscanf(line, "P%d: %f, %f", &(int){0}, &x, &y) == 3)
+            {
+                if (pointCount < MAX_SHAPES)
+                {
+                    points[pointCount++] = (Point){x, y};
+                }
+            }
+            break;
+        }
+        case 2:
+        {
+            if (strstr(line, "Cont:") != NULL)
+                continue;
+
+            Point init, end;
+            if (sscanf(line, "L%d: (%f, %f) -> (%f, %f)",
+                       &(int){0}, &init.x, &init.y, &end.x, &end.y) == 5)
+            {
+                if (lineCount < MAX_SHAPES)
+                {
+                    lines[lineCount++] = (Line){init, end};
+                }
+            }
+            break;
+        }
+        case 3:
+        {
+            if (strstr(line, "Cont:") != NULL)
+                continue;
+
+            if (strstr(line, "Poligono") != NULL)
+            {
+
+                if (currentPolygonIndex >= 0 && meshes[currentPolygonIndex].numberPoints > 0)
+                {
+                    meshCount++;
+                }
+
+                currentPolygonIndex++;
+                if (currentPolygonIndex >= MAX_SHAPES)
+                    break;
+
+                int numPoints;
+                if (sscanf(line, "Poligono %d - Pontas: %d", &(int){0}, &numPoints) == 2)
+                {
+                    meshes[currentPolygonIndex].numberPoints = 0;
+                }
+                continue;
+            }
+
+            float x, y;
+            if (sscanf(line, "  V%d: %f, %f", &(int){0}, &x, &y) == 3)
+            {
+                if (currentPolygonIndex >= 0 &&
+                    currentPolygonIndex < MAX_SHAPES &&
+                    meshes[currentPolygonIndex].numberPoints < MAX_POLYGON_POINTS)
+                {
+                    meshes[currentPolygonIndex].vertices[meshes[currentPolygonIndex].numberPoints++] = (Point){x, y};
+                }
+            }
+            break;
+        }
+        }
+    }
+
+    if (currentPolygonIndex >= 0 && meshes[currentPolygonIndex].numberPoints > 0)
+    {
+        meshCount++;
+    }
+
+    fclose(file);
+    printf("Os objetos foram carregados!\n");
+    return 1;
+}
+
 void hideMessage(int value)
 {
     showMessage = NONE_MESSAGE;
     glutPostRedisplay();
 }
 
+void drawSelectedObject()
+{
+    if (isSelected)
+    {
+        glColor3f(0.0f, 0.5f, 1.0f);
+        glLineWidth(1.0);
 
+        if (IdSelectedPoint >= 0)
+        {
+            float radius = 8.0f;
+            int segments = 20;
+            glBegin(GL_LINE_LOOP);
+            for (int i = 0; i < segments; i++)
+            {
+                float theta = 2.0f * PI * (float)i / (float)segments;
+                float x = points[IdSelectedPoint].x + radius * cosf(theta);
+                float y = points[IdSelectedPoint].y + radius * sinf(theta);
+                glVertex2f(x, y);
+            }
+            glEnd();
+        }
+        else if (IdSelectedLine >= 0)
+        {
+            Point center = calculateLineCenter(lines[IdSelectedLine]);
+            float radius = distance(center, lines[IdSelectedLine].init) + 10.0f;
+            int segments = 20;
+            glBegin(GL_LINE_LOOP);
+            for (int i = 0; i < segments; i++)
+            {
+                float theta = 2.0f * PI * (float)i / (float)segments;
+                float x = center.x + radius * cosf(theta);
+                float y = center.y + radius * sinf(theta);
+                glVertex2f(x, y);
+            }
+            glEnd();
+        }
+        else if (IdSelectedPolygon >= 0)
+        {
+            Point center = calculatePolygonCenter(meshes[IdSelectedPolygon]);
+            float maxDist = 0.0f;
+            for (int j = 0; j < meshes[IdSelectedPolygon].numberPoints; j++)
+            {
+                float dist = distance(center, meshes[IdSelectedPolygon].vertices[j]);
+                if (dist > maxDist)
+                    maxDist = dist;
+            }
+            float radius = maxDist + 10.0f;
+            int segments = 20;
+            glBegin(GL_LINE_LOOP);
+            for (int i = 0; i < segments; i++)
+            {
+                float theta = 2.0f * PI * (float)i / (float)segments;
+                float x = center.x + radius * cosf(theta);
+                float y = center.y + radius * sinf(theta);
+                glVertex2f(x, y);
+            }
+            glEnd();
+        }
+    }
+}
 
 void drawTransformInfo()
 {
@@ -708,7 +1193,7 @@ void keyboard(unsigned char key, int x, int y)
     case 'S':
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
-        saveObjectsToFile("objetos.txt",pointCount,lineCount,meshCount,points,lines,meshes);
+        saveObjectsToFile("objetos.txt");
         showMessage = SAVE_MESH;
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
@@ -719,7 +1204,7 @@ void keyboard(unsigned char key, int x, int y)
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
         showMessage = LOAD_MESH;
-        loadObjectsFromFile("objetos.txt",pointCount,lineCount,meshCount,points,lines,meshes, tempMesh);
+        loadObjectsFromFile("objetos.txt");
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         break;
@@ -738,7 +1223,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
     int normX = joystickX;
     int normY = joystickY;
 
-    // printf("%d, %d, %d\n", buttons, currentMode == LINE, isDrawing);
+    printf("%d, %d, %d\n", buttons, currentMode == LINE, isDrawing);
     if (x > 0)
         moveX = x / 80;
     else if (x < 0)
@@ -774,7 +1259,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
             tempLine.end = (Point){joystickX, joystickY};
             lines[lineCount++] = tempLine;
             isDrawing = 0;
-            // printf("Linha criada: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
+            printf("Linha criada: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
         }
         break;
 
@@ -782,7 +1267,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
         if (buttonMask != previousButtonMask)
         {
             showMessage = LOAD_MESH;
-            loadObjectsFromFile("objetos.txt", pointCount,lineCount,meshCount,points,lines,meshes, tempMesh);
+            loadObjectsFromFile("objetos.txt");
             glutTimerFunc(2000, hideMessage, 0);
             break;
         }
@@ -800,13 +1285,13 @@ void joystick(int unsigned buttons, int x, int y, int z)
         if (currentMode == VERTICE && buttonMask != previousButtonMask)
         {
             points[pointCount++] = (Point){joystickX, joystickY};
-            // printf("Ponto criado: (%d, %d) - Tipo: Vertice\n", joystickX, joystickY);
+            printf("Ponto criado: (%d, %d) - Tipo: Vertice\n", joystickX, joystickY);
         }
         else if (currentMode == LINE && !isDrawing && buttonMask != previousButtonMask)
         {
             tempLine.init = (Point){joystickX, joystickY};
             isDrawing = 1;
-            // printf("inicio da linha: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
+            printf("inicio da linha: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
         }
         else if (currentMode == LINE && buttons == JOYSTICK_QUAD)
         {
@@ -814,7 +1299,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
         }
         else if (currentMode == POLYGON && isDrawingPolygon && tempMesh.numberPoints < MAX_POLYGON_POINTS)
         {
-            // printf("polygono: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
+            printf("polygono: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
         }
         else if (currentMode == SELECTION && !isDrawing && buttonMask != previousButtonMask)
         {
@@ -827,7 +1312,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
             if (IdSelectedPoint >= 0)
             {
                 isSelected = 1;
-                // printf("Ponto selecionado: ID %d\n", IdSelectedPoint);
+                printf("Ponto selecionado: ID %d\n", IdSelectedPoint);
             }
             else
             {
@@ -871,7 +1356,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
     case JOYSTICK_TRIANGLE: // Triângulo
         if (buttonMask != previousButtonMask)
         {
-            saveObjectsToFile("objetos.txt",pointCount,lineCount,meshCount,points,lines,meshes);
+            saveObjectsToFile("objetos.txt");
             showMessage = SAVE_MESH;
             glutTimerFunc(2000, hideMessage, 0);
             break;
@@ -1412,15 +1897,15 @@ void display()
     {
         drawIconJoystick(joystickX, joystickY, 8);
     }
-    drawPreviewPoint(currentMode, isDrawing,tempPoint);
-    drawPreviewLine(currentMode,isDrawing,tempPoint,colorLoading_r,colorLoading_g,colorLoading_b,tempLine);
-    drawPreviewPolygon(isDrawingPolygon,colorLoading_r,colorLoading_g,colorLoading_b,tempMesh);
-    drawPoint(points,pointCount,isSelected,IdSelectedPoint);
-    drawLines(lines, lineCount,IdSelectedLine,isSelected);
-    drawPolygon(meshes,meshCount,IdSelectedPolygon, isSelected);
-    drawSelectedObject(isSelected,IdSelectedPoint,IdSelectedLine,IdSelectedPolygon,points,lines,meshes);
+    drawPreviewPoint();
+    drawPreviewLine();
+    drawPreviewPolygon();
+    drawPoint();
+    drawLines();
+    drawPolygon();
+    drawSelectedObject();
     drawTransformInfo();
-    drawMessage(showMessage);
+    drawMessage();
     glutSwapBuffers();
 }
 
@@ -1435,7 +1920,7 @@ int main(int argc, char **argv)
     initLines();
     initPoints();
     initPolygons();
-    loadObjectsFromFile("objetos.txt",pointCount,lineCount,meshCount,points,lines,meshes,tempMesh);
+    loadObjectsFromFile("objetos.txt");
     glutJoystickFunc(joystick, 10);
     glutReshapeFunc(reshape);
     glutDisplayFunc(display);

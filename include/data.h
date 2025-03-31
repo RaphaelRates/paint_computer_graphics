@@ -77,39 +77,16 @@ void initLines();
 void initPoints();
 void initPolygons();
 void display();
-
 void specialKeys(int key, int x, int y);
 void init();
-float distance(Point p1, Point p2);
-int selectPoint(int x, int y);
-int selectLine(int x, int y);
-int selectPolygon(int x, int y);
-void translatePoint(int id, float dx, float dy);
-void translateLine(int id, float dx, float dy);
-void translatePolygon(int id, float dx, float dy);
-void rotatePoint(int id, float angle);
-void rotateLine(int id, float angle);
-void rotatePolygon(int id, float angle);
-void scaleLine(int id, float sx, float sy);
-void scalePolygon(int id, float sx, float sy);
-void mirrorPoint(int id, int direction);
-void mirrorLine(int id, int direction);
-void mirrorPolygon(int id, int direction);
-void shearPoint(int id, float sx, float sy);
-void shearLine(int id, float sx, float sy);
-void shearPolygon(int id, float sx, float sy);
 void drawMessage();
-Point calculatePolygonCenter(Mesh m);
-Point calculateLineCenter(Line l);
 int *windowSize();
-void deleteSelectedObject();
 void hideMessage(int value);
 void mouse(int button, int state, int x, int y);
 void motion(int x, int y);
 void timer(int value);
 void passiveMotion(int x, int y);
 void keyboard(unsigned char key, int x, int y);
-Point scalePoint(Point point, Point reference, float scaleX, float scaleY);
 
 
 #endif

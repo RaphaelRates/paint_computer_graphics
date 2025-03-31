@@ -1,76 +1,14 @@
+//=================================================== IMPORTAÇÕES ======================================================
+
 #include <GL/glut.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#define MAX_POLYGON_POINTS 100
-#define MAX_SHAPES 1000
-#define CIRCLE_SEGMENTS 12
-#define POINT_RADIUS 3.0f
-#define PI 3.14159265358979323846
-#define SELECTION_THRESHOLD 10.0
-
-#define JOYSTICK_DOWN 0
-#define JOYSTICK_X 1
-#define JOYSTICK_CIRCLE 2
-#define JOYSTICK_TRIANGLE 8
-#define JOYSTICK_QUAD 4
-#define JOYSTICK_L1 16
-#define JOYSTICK_R1 32
-#define JOYSTICK_L2 64
-#define JOYSTICK_R2 128
-#define JOYSTICK_START 256
-#define JOYSTICK_L3 512
-#define JOYSTICK_OPT 1024
-#define JOYSTICK_R3 2048
-#define JOYSTICK_ICON_BUTTON 4096
-#define JOYSTICK_TOUCH 8192
-
-typedef struct
-{
-    float x, y;
-} Point;
-
-typedef struct
-{
-    Point init, end;
-} Line;
-
-typedef struct
-{
-    int numberPoints;
-    Point vertices[MAX_POLYGON_POINTS];
-} Mesh;
-
-typedef enum
-{
-    VERTICE,
-    LINE,
-    POLYGON,
-    NONE_MESH,
-    SELECTION
-} Mode;
-
-typedef enum
-{
-    SAVE_MESH,
-    LOAD_MESH,
-    DELETED,
-    NONE_MESSAGE,
-    IN_CONCERT,
-    LINE_LOG,
-    VERTCIE_LOG,
-    POLYLGON_LOG
-} MESSAGE;
-
-typedef enum
-{
-    NONE_TRANSFORMER,
-    TRANSLATE,
-    ROTATE,
-    SCALE,
-    MIRROR,
-    SHEAR
-} TransformMode;
+#include <data.h>
+#include <arqs.c>
+#include <draw.c>
+#include <transformers.c>
+#include <calculate.c>
 
 //==================================================== VARIAVEIS ============================================================
 
@@ -118,51 +56,7 @@ Mode currentMode = NONE_MESH;
 int joystickMode = 0;
 float colorLoading_r = 0.1f, colorLoading_g = 0.5f, colorLoading_b = 0.3f;
 
-int saveObjectsToFile(const char *filename);
-int loadObjectsFromFile(const char *filename);
-void initLines();
-void initPoints();
-void initPolygons();
-void display();
-void drawPoint();
-void drawLines();
-void drawPolygon();
-void drawPreviewPoint();
-void drawPreviewLine();
-void drawPreviewPolygon();
-void drawSelectedObject();
-void specialKeys(int key, int x, int y);
-void init();
-float distance(Point p1, Point p2);
-int selectPoint(int x, int y);
-int selectLine(int x, int y);
-int selectPolygon(int x, int y);
-void translatePoint(int id, float dx, float dy);
-void translateLine(int id, float dx, float dy);
-void translatePolygon(int id, float dx, float dy);
-void rotatePoint(int id, float angle);
-void rotateLine(int id, float angle);
-void rotatePolygon(int id, float angle);
-void scaleLine(int id, float sx, float sy);
-void scalePolygon(int id, float sx, float sy);
-void mirrorPoint(int id, int direction);
-void mirrorLine(int id, int direction);
-void mirrorPolygon(int id, int direction);
-void shearPoint(int id, float sx, float sy);
-void shearLine(int id, float sx, float sy);
-void shearPolygon(int id, float sx, float sy);
-void drawMessage();
-Point calculatePolygonCenter(Mesh m);
-Point calculateLineCenter(Line l);
-int *windowSize();
-void deleteSelectedObject();
-void hideMessage(int value);
-void mouse(int button, int state, int x, int y);
-void motion(int x, int y);
-void timer(int value);
-void passiveMotion(int x, int y);
-void keyboard(unsigned char key, int x, int y);
-Point scalePoint(Point point, Point reference, float scaleX, float scaleY);
+//============================================================ FUNÇÕES BASE =============================================================
 
 int *windowSize()
 {
@@ -172,7 +66,6 @@ int *windowSize()
         printf("Erro ao alocar memoria!\n");
         exit(1);
     }
-
     window[0] = (int)(0.8 * glutGet(GLUT_SCREEN_WIDTH));
     window[1] = (int)(0.8 * glutGet(GLUT_SCREEN_HEIGHT));
 
@@ -196,755 +89,6 @@ void initPolygons()
     if (meshes == NULL)
         meshes = (Mesh *)malloc(MAX_SHAPES * sizeof(Mesh));
 }
-
-void drawIconJoystick(int x, int y, int radius)
-{
-    glColor3f(0.5, 0.5, 0.5);
-    glBegin(GL_LINE_LOOP);
-    for (int i = 0; i < 360; i++)
-    {
-        float angle = i * PI / 180.0;
-        float dx = (radius + 2) * cos(angle);
-        float dy = (radius + 2) * sin(angle);
-        glVertex2f(x + dx, y + dy);
-    }
-    glEnd();
-    glColor3f(0.0, 0.8, 0.0);
-    glBegin(GL_POLYGON);
-    for (int i = 0; i < 360; i++)
-    {
-        float angle = i * PI / 180.0;
-        float dx = (radius)*cos(angle);
-        float dy = (radius)*sin(angle);
-        glVertex2f(x + dx, y + dy);
-    }
-    glEnd();
-}
-
-void drawPoint()
-{
-    glPointSize(5.0);
-    glBegin(GL_POINTS);
-    for (int i = 0; i < pointCount; i++)
-    {
-        if (i == IdSelectedPoint && isSelected)
-            glColor3f(1.0f, 0.0f, 0.0f);
-        else
-            glColor3f(0.0f, 0.0f, 0.0f);
-
-        glVertex2f(points[i].x, points[i].y);
-    }
-    glEnd();
-}
-
-void drawLines()
-{
-    glLineWidth(2.0);
-    for (int i = 0; i < lineCount; i++)
-    {
-        if (i == IdSelectedLine && isSelected)
-            glColor3f(1.0f, 0.0f, 0.0f);
-        else
-            glColor3f(0.0f, 0.0f, 0.0f);
-
-        glBegin(GL_LINES);
-        glVertex2f(lines[i].init.x, lines[i].init.y);
-        glVertex2f(lines[i].end.x, lines[i].end.y);
-        glEnd();
-    }
-}
-
-void drawPolygon()
-{
-    glLineWidth(2.0);
-    for (int i = 0; i < meshCount; i++)
-    {
-        if (i == IdSelectedPolygon && isSelected)
-            glColor3f(1.0f, 0.0f, 0.0f);
-        else
-            glColor3f(0.0f, 0.0f, 0.0f);
-
-        glBegin(GL_LINE_LOOP);
-        for (int j = 0; j < meshes[i].numberPoints; j++)
-        {
-            glVertex2f(meshes[i].vertices[j].x, meshes[i].vertices[j].y);
-        }
-        glEnd();
-    }
-}
-
-void drawPreviewPoint()
-{
-    if (currentMode == VERTICE && isDrawing)
-    {
-        glColor3f(0.8f, 1.0f, 0.4f);
-        glPointSize(5.0);
-        glBegin(GL_POINTS);
-        glVertex2f(tempPoint.x, tempPoint.y);
-        glEnd();
-    }
-}
-
-void drawPreviewLine()
-{
-    if (currentMode == LINE && isDrawing)
-    {
-        glColor3f(colorLoading_r, colorLoading_g, colorLoading_b);
-        glBegin(GL_LINES);
-        glVertex2f(tempLine.init.x, tempLine.init.y);
-        glVertex2f(tempLine.end.x, tempLine.end.y);
-        glColor3f(0.0f, 0.0f, 0.0f);
-        glEnd();
-    }
-}
-
-void drawPreviewPolygon()
-{
-    if (isDrawingPolygon)
-    {
-        glColor3f(colorLoading_r, colorLoading_g, colorLoading_b);
-        glBegin(GL_LINE_LOOP);
-        for (int i = 0; i < tempMesh.numberPoints; i++)
-        {
-            glVertex2f(tempMesh.vertices[i].x, tempMesh.vertices[i].y);
-        }
-        glColor3f(0.0f, 0.0f, 0.0f);
-        glEnd();
-    }
-}
-
-void drawMessage()
-{
-    int *window = windowSize();
-    switch (showMessage)
-    {
-    case SAVE_MESH:
-        glColor3f(0, 0.7, 0);
-    case LOAD_MESH:
-        glColor3f(0.6, 0.9, 0);
-        break;
-    case DELETED:
-        glColor3f(0.8, 0.0, 0.1);
-        break;
-    default:
-        glColor3f(0.0, 0.0, 0.0);
-        break;
-    }
-    glRasterPos2f((window[0] * 3) / 7, window[1] - 20);
-
-    const char *msg;
-    switch (showMessage)
-    {
-    case LINE_LOG:
-        msg = "Desenho para Linha";
-        break;
-    case    POLYLGON_LOG:
-        msg = "Desenho para Pligono";
-        break;
-    case VERTCIE_LOG:
-        msg = "Desenho para Vertice";
-        break;
-    case SAVE_MESH:
-        msg = "Arquivo salvo com sucesso!";
-        break;
-    case LOAD_MESH:
-        msg = "Arquivo carregado com sucesso!";
-        break;
-    case DELETED:
-        msg = "Objeto deletado!";
-        break;
-    case IN_CONCERT:
-        msg = "FUncionalidade em manutencao, sentimos muito!";
-        break;
-    default:
-        msg = "PAINT - PINTA COM GL";
-        break;
-    }
-
-    for (const char *c = msg; *c != '\0'; c++)
-    {
-        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
-    }
-}
-
-int saveObjectsToFile(const char *filename)
-{
-    FILE *file = fopen(filename, "w");
-    if (file == NULL)
-    {
-        printf("Erro ao abrir o arquivo para salvar.\n");
-        return 0;
-    }
-
-    fprintf(file, "[PONTOS]\n");
-    fprintf(file, "Cont: %d\n", pointCount);
-    for (int i = 0; i < pointCount; i++)
-    {
-        fprintf(file, "P%d: %.f, %.f\n", i, points[i].x, points[i].y);
-    }
-    fprintf(file, "\n");
-
-    fprintf(file, "[LINHAS]\n");
-    fprintf(file, "Cont: %d\n", lineCount);
-    for (int i = 0; i < lineCount; i++)
-    {
-        fprintf(file, "L%d: (%.f, %.f) -> (%.f, %.f)\n",
-                i, lines[i].init.x, lines[i].init.y,
-                lines[i].end.x, lines[i].end.y);
-    }
-    fprintf(file, "\n");
-
-    fprintf(file, "[POLIGONOS]\n");
-    fprintf(file, "Cont: %d\n", meshCount);
-    for (int i = 0; i < meshCount; i++)
-    {
-        fprintf(file, "Poligono %d - Pontas: %d\n", i, meshes[i].numberPoints);
-        for (int j = 0; j < meshes[i].numberPoints; j++)
-        {
-            fprintf(file, "  V%d: %.f, %.f\n",
-                    j, meshes[i].vertices[j].x, meshes[i].vertices[j].y);
-        }
-    }
-
-    fclose(file);
-    printf("Os objetos foram salvos no arquivo %s.\n", filename);
-    return 1;
-}
-
-int loadObjectsFromFile(const char *filename)
-{
-    FILE *file = fopen(filename, "r");
-    if (file == NULL)
-    {
-        printf("Erro ao abrir ao carregar objetos do arquivo.\n");
-        return 0;
-    }
-
-    pointCount = 0;
-    lineCount = 0;
-    meshCount = 0;
-    tempMesh.numberPoints = 0;
-
-    char line[256];
-    int currentSection = 0;
-    int currentPolygonIndex = -1;
-
-    while (fgets(line, sizeof(line), file))
-    {
-
-        line[strcspn(line, "\n")] = 0;
-        if (strlen(line) == 0)
-            continue;
-
-        if (strcmp(line, "[PONTOS]") == 0)
-        {
-            currentSection = 1;
-            continue;
-        }
-        else if (strcmp(line, "[LINHAS]") == 0)
-        {
-            currentSection = 2;
-            continue;
-        }
-        else if (strcmp(line, "[POLIGONOS]") == 0)
-        {
-            currentSection = 3;
-            continue;
-        }
-
-        switch (currentSection)
-        {
-        case 1:
-        {
-            if (strstr(line, "Cont:") != NULL)
-                continue;
-
-            float x, y;
-            if (sscanf(line, "P%d: %f, %f", &(int){0}, &x, &y) == 3)
-            {
-                if (pointCount < MAX_SHAPES)
-                {
-                    points[pointCount++] = (Point){x, y};
-                }
-            }
-            break;
-        }
-        case 2:
-        {
-            if (strstr(line, "Cont:") != NULL)
-                continue;
-
-            Point init, end;
-            if (sscanf(line, "L%d: (%f, %f) -> (%f, %f)",
-                       &(int){0}, &init.x, &init.y, &end.x, &end.y) == 5)
-            {
-                if (lineCount < MAX_SHAPES)
-                {
-                    lines[lineCount++] = (Line){init, end};
-                }
-            }
-            break;
-        }
-        case 3:
-        {
-            if (strstr(line, "Cont:") != NULL)
-                continue;
-
-            if (strstr(line, "Poligono") != NULL)
-            {
-
-                if (currentPolygonIndex >= 0 && meshes[currentPolygonIndex].numberPoints > 0)
-                {
-                    meshCount++;
-                }
-
-                currentPolygonIndex++;
-                if (currentPolygonIndex >= MAX_SHAPES)
-                    break;
-
-                int numPoints;
-                if (sscanf(line, "Poligono %d - Pontas: %d", &(int){0}, &numPoints) == 2)
-                {
-                    meshes[currentPolygonIndex].numberPoints = 0;
-                }
-                continue;
-            }
-
-            float x, y;
-            if (sscanf(line, "  V%d: %f, %f", &(int){0}, &x, &y) == 3)
-            {
-                if (currentPolygonIndex >= 0 &&
-                    currentPolygonIndex < MAX_SHAPES &&
-                    meshes[currentPolygonIndex].numberPoints < MAX_POLYGON_POINTS)
-                {
-                    meshes[currentPolygonIndex].vertices[meshes[currentPolygonIndex].numberPoints++] = (Point){x, y};
-                }
-            }
-            break;
-        }
-        }
-    }
-
-    if (currentPolygonIndex >= 0 && meshes[currentPolygonIndex].numberPoints > 0)
-    {
-        meshCount++;
-    }
-
-    fclose(file);
-    printf("Os objetos foram carregados!\n");
-    return 1;
-}
-
-void hideMessage(int value)
-{
-    showMessage = NONE_MESSAGE;
-    glutPostRedisplay();
-}
-
-void drawSelectedObject()
-{
-    if (isSelected)
-    {
-        glColor3f(0.0f, 0.5f, 1.0f);
-        glLineWidth(1.0);
-
-        if (IdSelectedPoint >= 0)
-        {
-            float radius = 8.0f;
-            int segments = 20;
-            glBegin(GL_LINE_LOOP);
-            for (int i = 0; i < segments; i++)
-            {
-                float theta = 2.0f * PI * (float)i / (float)segments;
-                float x = points[IdSelectedPoint].x + radius * cosf(theta);
-                float y = points[IdSelectedPoint].y + radius * sinf(theta);
-                glVertex2f(x, y);
-            }
-            glEnd();
-        }
-        else if (IdSelectedLine >= 0)
-        {
-            Point center = calculateLineCenter(lines[IdSelectedLine]);
-            float radius = distance(center, lines[IdSelectedLine].init) + 10.0f;
-            int segments = 20;
-            glBegin(GL_LINE_LOOP);
-            for (int i = 0; i < segments; i++)
-            {
-                float theta = 2.0f * PI * (float)i / (float)segments;
-                float x = center.x + radius * cosf(theta);
-                float y = center.y + radius * sinf(theta);
-                glVertex2f(x, y);
-            }
-            glEnd();
-        }
-        else if (IdSelectedPolygon >= 0)
-        {
-            Point center = calculatePolygonCenter(meshes[IdSelectedPolygon]);
-            float maxDist = 0.0f;
-            for (int j = 0; j < meshes[IdSelectedPolygon].numberPoints; j++)
-            {
-                float dist = distance(center, meshes[IdSelectedPolygon].vertices[j]);
-                if (dist > maxDist)
-                    maxDist = dist;
-            }
-            float radius = maxDist + 10.0f;
-            int segments = 20;
-            glBegin(GL_LINE_LOOP);
-            for (int i = 0; i < segments; i++)
-            {
-                float theta = 2.0f * PI * (float)i / (float)segments;
-                float x = center.x + radius * cosf(theta);
-                float y = center.y + radius * sinf(theta);
-                glVertex2f(x, y);
-            }
-            glEnd();
-        }
-    }
-}
-
-void drawTransformInfo()
-{
-    glColor3f(0.0f, 0.0f, 0.0f);
-    glRasterPos2i(10, 10);
-
-    char info[100] = "";
-
-    if (isSelected)
-    {
-        char *objectType;
-        if (IdSelectedPoint >= 0)
-            objectType = "Ponto";
-        else if (IdSelectedLine >= 0)
-            objectType = "Linha";
-        else if (IdSelectedPolygon >= 0)
-            objectType = "Poligono";
-
-        switch (currentTransform)
-        {
-        case TRANSLATE:
-            sprintf(info, "Translacao de %s [Setas]", objectType);
-            break;
-        case ROTATE:
-            sprintf(info, "Rotacao de %s [A/D] angulo: %.1f graus", objectType, rotationAngle);
-            break;
-        case SCALE:
-            sprintf(info, "Escala de %s [+/-] X:%.1f Y:%.1f", objectType, scaleFactorX, scaleFactorY);
-            break;
-        case MIRROR:
-            sprintf(info, "Reflexao de %s [X/Y]", objectType);
-            break;
-        case SHEAR:
-            sprintf(info, "Cisalhamento de %s [Shift+Setas] X:%.1f Y:%.1f", objectType, shearFactorX, shearFactorY);
-            break;
-        default:
-            sprintf(info, "%s selecionado", objectType);
-        }
-
-        // Renderiza o texto (simplificado, em um sistema real usaria glutBitmapCharacter)
-        for (char *c = info; *c != '\0'; c++)
-        {
-            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, *c);
-        }
-    }
-}
-
-float distance(Point p1, Point p2)
-{
-    return sqrt((p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y));
-}
-
-float pointToLineDistance(Point p, Line l)
-{
-    float x0 = p.x;
-    float y0 = p.y;
-    float x1 = l.init.x;
-    float y1 = l.init.y;
-    float x2 = l.end.x;
-    float y2 = l.end.y;
-
-    float l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
-    if (l2 == 0.0)
-        return distance(p, l.init);
-
-    float t = ((x0 - x1) * (x2 - x1) + (y0 - y1) * (y2 - y1)) / l2;
-    t = (t < 0) ? 0 : (t > 1) ? 1
-                              : t;
-
-    float projx = x1 + t * (x2 - x1);
-    float projy = y1 + t * (y2 - y1);
-
-    return sqrt((x0 - projx) * (x0 - projx) + (y0 - projy) * (y0 - projy));
-}
-
-int isPointInPolygon(Point p, Mesh m)
-{
-    int i, j, c = 0;
-    for (i = 0, j = m.numberPoints - 1; i < m.numberPoints; j = i++)
-    {
-        if (((m.vertices[i].y > p.y) != (m.vertices[j].y > p.y)) &&
-            (p.x < (m.vertices[j].x - m.vertices[i].x) * (p.y - m.vertices[i].y) /
-                           (m.vertices[j].y - m.vertices[i].y) +
-                       m.vertices[i].x))
-            c = !c;
-    }
-    return c;
-}
-
-int selectPoint(int x, int y)
-{
-    Point clickPoint = {x, y};
-    float minDist = SELECTION_THRESHOLD;
-    int selectedId = -1;
-
-    for (int i = 0; i < pointCount; i++)
-    {
-        float dist = distance(clickPoint, points[i]);
-        if (dist < minDist)
-        {
-            minDist = dist;
-            selectedId = i;
-        }
-    }
-
-    return selectedId;
-}
-
-int selectLine(int x, int y)
-{
-    Point clickPoint = {x, y};
-    float minDist = SELECTION_THRESHOLD;
-    int selectedId = -1;
-
-    for (int i = 0; i < lineCount; i++)
-    {
-        float dist = pointToLineDistance(clickPoint, lines[i]);
-        if (dist < minDist)
-        {
-            minDist = dist;
-            selectedId = i;
-        }
-    }
-
-    return selectedId;
-}
-
-int selectPolygon(int x, int y)
-{
-    Point clickPoint = {x, y};
-
-    for (int i = 0; i < meshCount; i++)
-    {
-        if (isPointInPolygon(clickPoint, meshes[i]))
-        {
-            return i;
-        }
-    }
-
-    float minDist = SELECTION_THRESHOLD;
-    int selectedId = -1;
-
-    for (int i = 0; i < meshCount; i++)
-    {
-        for (int j = 0; j < meshes[i].numberPoints; j++)
-        {
-            int next = (j + 1) % meshes[i].numberPoints;
-            Line edge = {meshes[i].vertices[j], meshes[i].vertices[next]};
-            float dist = pointToLineDistance(clickPoint, edge);
-            if (dist < minDist)
-            {
-                minDist = dist;
-                selectedId = i;
-            }
-        }
-    }
-
-    return selectedId;
-}
-
-Point calculateLineCenter(Line l)
-{
-    Point center;
-    center.x = (l.init.x + l.end.x) / 2.0f;
-    center.y = (l.init.y + l.end.y) / 2.0f;
-    return center;
-}
-
-Point calculatePolygonCenter(Mesh m)
-{
-    Point center = {0, 0};
-    for (int i = 0; i < m.numberPoints; i++)
-    {
-        center.x += m.vertices[i].x;
-        center.y += m.vertices[i].y;
-    }
-    center.x /= m.numberPoints;
-    center.y /= m.numberPoints;
-    return center;
-}
-
-void translatePoint(int id, float dx, float dy)
-{
-    points[id].x += dx;
-    points[id].y += dy;
-}
-
-void translateLine(int id, float dx, float dy)
-{
-    lines[id].init.x += dx;
-    lines[id].init.y += dy;
-    lines[id].end.x += dx;
-    lines[id].end.y += dy;
-}
-
-void translatePolygon(int id, float dx, float dy)
-{
-    for (int i = 0; i < meshes[id].numberPoints; i++)
-    {
-        meshes[id].vertices[i].x += dx;
-        meshes[id].vertices[i].y += dy;
-    }
-}
-
-void rotatePoint(int id, float angle)
-{
-    float angleRad = angle * (PI / 180.0f);
-    float s = sin(angleRad);
-    float c = cos(angleRad);
-    float x = points[id].x;
-    float y = points[id].y;
-
-    points[id].x = x * c - y * s;
-    points[id].y = x * s + y * c;
-}
-
-void rotatePointAroundCenter(Point *p, Point center, float angle)
-{
-    float angleRad = angle * (PI / 180.0f);
-    float s = sin(angleRad);
-    float c = cos(angleRad);
-
-    float x = p->x - center.x;
-    float y = p->y - center.y;
-
-    float xnew = x * c - y * s;
-    float ynew = x * s + y * c;
-
-    p->x = xnew + center.x;
-    p->y = ynew + center.y;
-}
-
-void rotateLine(int id, float angle)
-{
-    Point center = calculateLineCenter(lines[id]);
-    rotatePointAroundCenter(&lines[id].init, center, angle);
-    rotatePointAroundCenter(&lines[id].end, center, angle);
-}
-
-void rotatePolygon(int id, float angle)
-{
-    Point center = calculatePolygonCenter(meshes[id]);
-    for (int i = 0; i < meshes[id].numberPoints; i++)
-    {
-        rotatePointAroundCenter(&meshes[id].vertices[i], center, angle);
-    }
-}
-
-void scalePointAroundCenter(Point *p, Point center, float sx, float sy)
-{
-    float x = p->x - center.x;
-    float y = p->y - center.y;
-
-    x *= sx;
-    y *= sy;
-
-    p->x = x + center.x;
-    p->y = y + center.y;
-}
-
-void scaleLine(int id, float sx, float sy)
-{
-    Point center = calculateLineCenter(lines[id]);
-    scalePointAroundCenter(&lines[id].init, center, sx, sy);
-    scalePointAroundCenter(&lines[id].end, center, sx, sy);
-}
-
-void scalePolygon(int id, float sx, float sy)
-{
-    Point center = calculatePolygonCenter(meshes[id]);
-    for (int i = 0; i < meshes[id].numberPoints; i++)
-    {
-        scalePointAroundCenter(&meshes[id].vertices[i], center, sx, sy);
-    }
-}
-
-void mirrorPointAroundAxis(Point *p, Point center, int direction)
-{
-    if (direction == 0)
-    {
-        p->x = 2 * center.x - p->x;
-    }
-    else
-    {
-        p->y = 2 * center.y - p->y;
-    }
-}
-
-void mirrorPoint(int id, int direction)
-{
-    Point origin = {0, 0};
-    mirrorPointAroundAxis(&points[id], origin, direction);
-}
-
-void mirrorLine(int id, int direction)
-{
-    Point center = calculateLineCenter(lines[id]);
-    mirrorPointAroundAxis(&lines[id].init, center, direction);
-    mirrorPointAroundAxis(&lines[id].end, center, direction);
-}
-
-void mirrorPolygon(int id, int direction)
-{
-    Point center = calculatePolygonCenter(meshes[id]);
-    for (int i = 0; i < meshes[id].numberPoints; i++)
-    {
-        mirrorPointAroundAxis(&meshes[id].vertices[i], center, direction);
-    }
-}
-
-void shearPointAroundCenter(Point *p, Point center, float sx, float sy)
-{
-    float x = p->x - center.x;
-    float y = p->y - center.y;
-
-    float xnew = x + sx * y;
-    float ynew = sy * x + y;
-
-    p->x = xnew + center.x;
-    p->y = ynew + center.y;
-}
-
-void shearPoint(int id, float sx, float sy)
-{
-    Point origin = {0, 0};
-    shearPointAroundCenter(&points[id], origin, sx, sy);
-}
-
-void shearLine(int id, float sx, float sy)
-{
-    Point center = calculateLineCenter(lines[id]);
-    shearPointAroundCenter(&lines[id].init, center, sx, sy);
-    shearPointAroundCenter(&lines[id].end, center, sx, sy);
-}
-
-void shearPolygon(int id, float sx, float sy)
-{
-    Point center = calculatePolygonCenter(meshes[id]);
-    for (int i = 0; i < meshes[id].numberPoints; i++)
-    {
-        shearPointAroundCenter(&meshes[id].vertices[i], center, sx, sy);
-    }
-}
-
 void deleteSelectedObject()
 {
     if (!isSelected)
@@ -983,6 +127,35 @@ void deleteSelectedObject()
     IdSelectedPolygon = -1;
     isSelected = 0;
     currentTransform = NONE_TRANSFORMER;
+}
+void drawIconJoystick(int x, int y, int radius)
+{
+    glColor3f(0.5, 0.5, 0.5);
+    glBegin(GL_LINE_LOOP);
+    for (int i = 0; i < 360; i++)
+    {
+        float angle = i * PI / 180.0;
+        float dx = (radius + 2) * cos(angle);
+        float dy = (radius + 2) * sin(angle);
+        glVertex2f(x + dx, y + dy);
+    }
+    glEnd();
+    glColor3f(0.0, 0.8, 0.0);
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 360; i++)
+    {
+        float angle = i * PI / 180.0;
+        float dx = (radius)*cos(angle);
+        float dy = (radius)*sin(angle);
+        glVertex2f(x + dx, y + dy);
+    }
+    glEnd();
+}
+
+void hideMessage(int value)
+{
+    showMessage = NONE_MESSAGE;
+    glutPostRedisplay();
 }
 
 void keyboard(unsigned char key, int x, int y)
@@ -1097,11 +270,11 @@ void keyboard(unsigned char key, int x, int y)
             joystickActive = 0;
             mirrorDirection = 0;
             if (IdSelectedPoint >= 0)
-                mirrorPoint(IdSelectedPoint, 0);
+                mirrorPoint(IdSelectedPoint, 0, points);
             else if (IdSelectedLine >= 0)
-                mirrorLine(IdSelectedLine, 0);
+                mirrorLine(IdSelectedLine, 0, lines);
             else if (IdSelectedPolygon >= 0)
-                mirrorPolygon(IdSelectedPolygon, 0);
+                mirrorPolygon(IdSelectedPolygon, 0, meshes);
             printf("Reflexao horizontal aplicada\n");
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
@@ -1113,11 +286,11 @@ void keyboard(unsigned char key, int x, int y)
             joystickActive = 0;
             mirrorDirection = 1;
             if (IdSelectedPoint >= 0)
-                mirrorPoint(IdSelectedPoint, 1);
+                mirrorPoint(IdSelectedPoint, 1,points);
             else if (IdSelectedLine >= 0)
-                mirrorLine(IdSelectedLine, 1);
+                mirrorLine(IdSelectedLine, 1, lines);
             else if (IdSelectedPolygon >= 0)
-                mirrorPolygon(IdSelectedPolygon, 1);
+                mirrorPolygon(IdSelectedPolygon, 1, meshes);
             printf("Reflexao vertical aplicada\n");
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
@@ -1129,11 +302,11 @@ void keyboard(unsigned char key, int x, int y)
             joystickActive = 0;
             rotationAngle -= 5.0f;
             if (IdSelectedPoint >= 0)
-                rotatePoint(IdSelectedPoint, -5.0f);
+                rotatePoint(IdSelectedPoint, -5.0f, points);
             else if (IdSelectedLine >= 0)
-                rotateLine(IdSelectedLine, -5.0f);
+                rotateLine(IdSelectedLine, -5.0f, lines);
             else if (IdSelectedPolygon >= 0)
-                rotatePolygon(IdSelectedPolygon, -5.0f);
+                rotatePolygon(IdSelectedPolygon, -5.0f, meshes);
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
         break;
@@ -1144,11 +317,11 @@ void keyboard(unsigned char key, int x, int y)
             joystickActive = 0;
             rotationAngle += 5.0f;
             if (IdSelectedPoint >= 0)
-                rotatePoint(IdSelectedPoint, 5.0f);
+                rotatePoint(IdSelectedPoint, 5.0f, points);
             else if (IdSelectedLine >= 0)
-                rotateLine(IdSelectedLine, 5.0f);
+                rotateLine(IdSelectedLine, 5.0f, lines);
             else if (IdSelectedPolygon >= 0)
-                rotatePolygon(IdSelectedPolygon, 5.0f);
+                rotatePolygon(IdSelectedPolygon, 5.0f, meshes);
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
         break;
@@ -1161,9 +334,9 @@ void keyboard(unsigned char key, int x, int y)
             scaleFactorX *= 1.1f;
             scaleFactorY *= 1.1f;
             if (IdSelectedLine >= 0)
-                scaleLine(IdSelectedLine, 1.1f, 1.1f);
+                scaleLine(IdSelectedLine, 1.1f, 1.1f, lines);
             else if (IdSelectedPolygon >= 0)
-                scalePolygon(IdSelectedPolygon, 1.1f, 1.1f);
+                scalePolygon(IdSelectedPolygon, 1.1f, 1.1f, meshes);
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
         break;
@@ -1176,9 +349,9 @@ void keyboard(unsigned char key, int x, int y)
             scaleFactorX *= 0.9f;
             scaleFactorY *= 0.9f;
             if (IdSelectedLine >= 0)
-                scaleLine(IdSelectedLine, 0.9f, 0.9f);
+                scaleLine(IdSelectedLine, 0.9f, 0.9f, lines);
             else if (IdSelectedPolygon >= 0)
-                scalePolygon(IdSelectedPolygon, 0.9f, 0.9f);
+                scalePolygon(IdSelectedPolygon, 0.9f, 0.9f, meshes);
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
         break;
@@ -1193,7 +366,7 @@ void keyboard(unsigned char key, int x, int y)
     case 'S':
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
-        saveObjectsToFile("objetos.txt");
+        saveObjectsToFile("objetos.txt",pointCount,lineCount,meshCount,points,lines,meshes);
         showMessage = SAVE_MESH;
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
@@ -1204,7 +377,7 @@ void keyboard(unsigned char key, int x, int y)
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
         showMessage = LOAD_MESH;
-        loadObjectsFromFile("objetos.txt");
+        loadObjectsFromFile("objetos.txt", &pointCount, &lineCount, &meshCount, &points, &lines, &meshes, &tempMesh);
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         break;
@@ -1218,17 +391,15 @@ void keyboard(unsigned char key, int x, int y)
 void joystick(int unsigned buttons, int x, int y, int z)
 {
     int *window = windowSize();
-
     int moveX = 0, moveY = 0;
     int normX = joystickX;
     int normY = joystickY;
 
-    printf("%d, %d, %d\n", buttons, currentMode == LINE, isDrawing);
+    // printf("%d, %d, %d\n", buttons, currentMode == LINE, isDrawing);
     if (x > 0)
         moveX = x / 80;
     else if (x < 0)
         moveX = x / 80;
-
     if (y > 0)
         moveY = -y / 80;
     else if (y < 0)
@@ -1259,7 +430,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
             tempLine.end = (Point){joystickX, joystickY};
             lines[lineCount++] = tempLine;
             isDrawing = 0;
-            printf("Linha criada: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
+            // printf("Linha criada: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
         }
         break;
 
@@ -1267,7 +438,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
         if (buttonMask != previousButtonMask)
         {
             showMessage = LOAD_MESH;
-            loadObjectsFromFile("objetos.txt");
+            loadObjectsFromFile("objetos.txt", &pointCount, &lineCount, &meshCount, &points, &lines, &meshes, &tempMesh);
             glutTimerFunc(2000, hideMessage, 0);
             break;
         }
@@ -1285,13 +456,13 @@ void joystick(int unsigned buttons, int x, int y, int z)
         if (currentMode == VERTICE && buttonMask != previousButtonMask)
         {
             points[pointCount++] = (Point){joystickX, joystickY};
-            printf("Ponto criado: (%d, %d) - Tipo: Vertice\n", joystickX, joystickY);
+            // printf("Ponto criado: (%d, %d) - Tipo: Vertice\n", joystickX, joystickY);
         }
         else if (currentMode == LINE && !isDrawing && buttonMask != previousButtonMask)
         {
             tempLine.init = (Point){joystickX, joystickY};
             isDrawing = 1;
-            printf("inicio da linha: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
+            // printf("inicio da linha: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
         }
         else if (currentMode == LINE && buttons == JOYSTICK_QUAD)
         {
@@ -1299,7 +470,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
         }
         else if (currentMode == POLYGON && isDrawingPolygon && tempMesh.numberPoints < MAX_POLYGON_POINTS)
         {
-            printf("polygono: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
+            // printf("polygono: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
         }
         else if (currentMode == SELECTION && !isDrawing && buttonMask != previousButtonMask)
         {
@@ -1307,16 +478,16 @@ void joystick(int unsigned buttons, int x, int y, int z)
             IdSelectedLine = -1;
             IdSelectedPolygon = -1;
             isSelected = 0;
-            IdSelectedPoint = selectPoint(joystickX, joystickY);
+            IdSelectedPoint = selectPoint(joystickX, joystickY, pointCount, points);
 
             if (IdSelectedPoint >= 0)
             {
                 isSelected = 1;
-                printf("Ponto selecionado: ID %d\n", IdSelectedPoint);
+                // printf("Ponto selecionado: ID %d\n", IdSelectedPoint);
             }
             else
             {
-                IdSelectedLine = selectLine(joystickX, joystickY);
+                IdSelectedLine = selectLine(joystickX, joystickY,lineCount, lines);
 
                 if (IdSelectedLine >= 0)
                 {
@@ -1325,7 +496,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
                 }
                 else
                 {
-                    IdSelectedPolygon = selectPolygon(joystickX, joystickY);
+                    IdSelectedPolygon = selectPolygon(joystickX, joystickY, meshCount, meshes);
 
                     if (IdSelectedPolygon >= 0)
                     {
@@ -1356,7 +527,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
     case JOYSTICK_TRIANGLE: // Triângulo
         if (buttonMask != previousButtonMask)
         {
-            saveObjectsToFile("objetos.txt");
+            saveObjectsToFile("objetos.txt",pointCount,lineCount,meshCount,points,lines,meshes);
             showMessage = SAVE_MESH;
             glutTimerFunc(2000, hideMessage, 0);
             break;
@@ -1483,7 +654,7 @@ void mouse(int button, int state, int x, int y)
                 IdSelectedLine = -1;
                 IdSelectedPolygon = -1;
                 isSelected = 0;
-                IdSelectedPoint = selectPoint(normX, normY);
+                IdSelectedPoint = selectPoint(normX, normY, pointCount, points);
 
                 if (IdSelectedPoint >= 0)
                 {
@@ -1492,7 +663,7 @@ void mouse(int button, int state, int x, int y)
                 }
                 else
                 {
-                    IdSelectedLine = selectLine(normX, normY);
+                    IdSelectedLine = selectLine(normX, normY, lineCount, lines);
 
                     if (IdSelectedLine >= 0)
                     {
@@ -1501,7 +672,7 @@ void mouse(int button, int state, int x, int y)
                     }
                     else
                     {
-                        IdSelectedPolygon = selectPolygon(normX, normY);
+                        IdSelectedPolygon = selectPolygon(normX, normY, meshCount,meshes);
 
                         if (IdSelectedPolygon >= 0)
                         {
@@ -1592,11 +763,11 @@ void mouse(int button, int state, int x, int y)
 
             if (IdSelectedLine >= 0)
             {
-                scaleLine(IdSelectedLine, 1.1f, 1.1f);
+                scaleLine(IdSelectedLine, 1.1f, 1.1f, lines);
             }
             else if (IdSelectedPolygon >= 0)
             {
-                scalePolygon(IdSelectedPolygon, 1.1f, 1.1f);
+                scalePolygon(IdSelectedPolygon, 1.1f, 1.1f, meshes);
             }
             break;
         case ROTATE:
@@ -1604,15 +775,15 @@ void mouse(int button, int state, int x, int y)
 
             if (IdSelectedPoint >= 0)
             {
-                rotatePoint(IdSelectedPoint, 5.0f);
+                rotatePoint(IdSelectedPoint, 5.0f, points);
             }
             else if (IdSelectedLine >= 0)
             {
-                rotateLine(IdSelectedLine, 5.0f);
+                rotateLine(IdSelectedLine, 5.0f, lines);
             }
             else if (IdSelectedPolygon >= 0)
             {
-                rotatePolygon(IdSelectedPolygon, 5.0f);
+                rotatePolygon(IdSelectedPolygon, 5.0f, meshes);
             }
             break;
         }
@@ -1627,11 +798,11 @@ void mouse(int button, int state, int x, int y)
 
             if (IdSelectedLine >= 0)
             {
-                scaleLine(IdSelectedLine, 0.9f, 0.9f);
+                scaleLine(IdSelectedLine, 0.9f, 0.9f, lines);
             }
             else if (IdSelectedPolygon >= 0)
             {
-                scalePolygon(IdSelectedPolygon, 0.9f, 0.9f);
+                scalePolygon(IdSelectedPolygon, 0.9f, 0.9f, meshes);
             }
             break;
         case ROTATE:
@@ -1639,15 +810,15 @@ void mouse(int button, int state, int x, int y)
 
             if (IdSelectedPoint >= 0)
             {
-                rotatePoint(IdSelectedPoint, -5.0f);
+                rotatePoint(IdSelectedPoint, -5.0f, points);
             }
             else if (IdSelectedLine >= 0)
             {
-                rotateLine(IdSelectedLine, -5.0f);
+                rotateLine(IdSelectedLine, -5.0f, lines);
             }
             else if (IdSelectedPolygon >= 0)
             {
-                rotatePolygon(IdSelectedPolygon, -5.0f);
+                rotatePolygon(IdSelectedPolygon, -5.0f, meshes);
             }
             break;
         }
@@ -1684,15 +855,15 @@ void motion(int x, int y)
 
             if (IdSelectedPoint >= 0)
             {
-                translatePoint(IdSelectedPoint, dx, dy);
+                translatePoint(IdSelectedPoint, dx, dy, points);
             }
             else if (IdSelectedLine >= 0)
             {
-                translateLine(IdSelectedLine, dx, dy);
+                translateLine(IdSelectedLine, dx, dy, lines);
             }
             else if (IdSelectedPolygon >= 0)
             {
-                translatePolygon(IdSelectedPolygon, dx, dy);
+                translatePolygon(IdSelectedPolygon, dx, dy, meshes);
             }
 
             lastMousePos.x = normX;
@@ -1720,15 +891,15 @@ void specialKeys(int key, int x, int y)
             {
                 if (IdSelectedPoint >= 0)
                 {
-                    translatePoint(IdSelectedPoint, 0, step);
+                    translatePoint(IdSelectedPoint, 0, step, points);
                 }
                 else if (IdSelectedLine >= 0)
                 {
-                    translateLine(IdSelectedLine, 0, step);
+                    translateLine(IdSelectedLine, 0, step, lines);
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    translatePolygon(IdSelectedPolygon, 0, step);
+                    translatePolygon(IdSelectedPolygon, 0, step,meshes);
                 }
             }
             else if (currentTransform == SHEAR && shiftPressed)
@@ -1737,15 +908,15 @@ void specialKeys(int key, int x, int y)
 
                 if (IdSelectedPoint >= 0)
                 {
-                    shearPoint(IdSelectedPoint, 0, 0.1f);
+                    shearPoint(IdSelectedPoint, 0, 0.1f, points);
                 }
                 else if (IdSelectedLine >= 0)
                 {
-                    shearLine(IdSelectedLine, 0, 0.1f);
+                    shearLine(IdSelectedLine, 0, 0.1f, lines);
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    shearPolygon(IdSelectedPolygon, 0, 0.1f);
+                    shearPolygon(IdSelectedPolygon, 0, 0.1f, meshes);
                 }
             }
             break;
@@ -1755,15 +926,15 @@ void specialKeys(int key, int x, int y)
             {
                 if (IdSelectedPoint >= 0)
                 {
-                    translatePoint(IdSelectedPoint, 0, -step);
+                    translatePoint(IdSelectedPoint, 0, -step, points);
                 }
                 else if (IdSelectedLine >= 0)
                 {
-                    translateLine(IdSelectedLine, 0, -step);
+                    translateLine(IdSelectedLine, 0, -step, lines);
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    translatePolygon(IdSelectedPolygon, 0, -step);
+                    translatePolygon(IdSelectedPolygon, 0, -step, meshes);
                 }
             }
             else if (currentTransform == SHEAR && shiftPressed)
@@ -1772,15 +943,15 @@ void specialKeys(int key, int x, int y)
 
                 if (IdSelectedPoint >= 0)
                 {
-                    shearPoint(IdSelectedPoint, 0, -0.1f);
+                    shearPoint(IdSelectedPoint, 0, -0.1f, points);
                 }
                 else if (IdSelectedLine >= 0)
                 {
-                    shearLine(IdSelectedLine, 0, -0.1f);
+                    shearLine(IdSelectedLine, 0, -0.1f, lines);
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    shearPolygon(IdSelectedPolygon, 0, -0.1f);
+                    shearPolygon(IdSelectedPolygon, 0, -0.1f, meshes);
                 }
             }
             break;
@@ -1790,15 +961,15 @@ void specialKeys(int key, int x, int y)
             {
                 if (IdSelectedPoint >= 0)
                 {
-                    translatePoint(IdSelectedPoint, -step, 0);
+                    translatePoint(IdSelectedPoint, -step, 0, points);
                 }
                 else if (IdSelectedLine >= 0)
                 {
-                    translateLine(IdSelectedLine, -step, 0);
+                    translateLine(IdSelectedLine, -step, 0, lines);
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    translatePolygon(IdSelectedPolygon, -step, 0);
+                    translatePolygon(IdSelectedPolygon, -step, 0, meshes);
                 }
             }
             else if (currentTransform == SHEAR && shiftPressed)
@@ -1807,15 +978,15 @@ void specialKeys(int key, int x, int y)
 
                 if (IdSelectedPoint >= 0)
                 {
-                    shearPoint(IdSelectedPoint, -0.1f, 0);
+                    shearPoint(IdSelectedPoint, -0.1f, 0, points);
                 }
                 else if (IdSelectedLine >= 0)
                 {
-                    shearLine(IdSelectedLine, -0.1f, 0);
+                    shearLine(IdSelectedLine, -0.1f, 0, lines);
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    shearPolygon(IdSelectedPolygon, -0.1f, 0);
+                    shearPolygon(IdSelectedPolygon, -0.1f, 0, meshes);
                 }
             }
             break;
@@ -1825,15 +996,15 @@ void specialKeys(int key, int x, int y)
             {
                 if (IdSelectedPoint >= 0)
                 {
-                    translatePoint(IdSelectedPoint, step, 0);
+                    translatePoint(IdSelectedPoint, step, 0, points);
                 }
                 else if (IdSelectedLine >= 0)
                 {
-                    translateLine(IdSelectedLine, step, 0);
+                    translateLine(IdSelectedLine, step, 0, lines);
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    translatePolygon(IdSelectedPolygon, step, 0);
+                    translatePolygon(IdSelectedPolygon, step, 0, meshes);
                 }
             }
             else if (currentTransform == SHEAR && shiftPressed)
@@ -1842,15 +1013,15 @@ void specialKeys(int key, int x, int y)
 
                 if (IdSelectedPoint >= 0)
                 {
-                    shearPoint(IdSelectedPoint, 0.1f, 0);
+                    shearPoint(IdSelectedPoint, 0.1f, 0, points);
                 }
                 else if (IdSelectedLine >= 0)
                 {
-                    shearLine(IdSelectedLine, 0.1f, 0);
+                    shearLine(IdSelectedLine, 0.1f, 0, lines);
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    shearPolygon(IdSelectedPolygon, 0.1f, 0);
+                    shearPolygon(IdSelectedPolygon, 0.1f, 0, meshes);
                 }
             }
             break;
@@ -1897,15 +1068,15 @@ void display()
     {
         drawIconJoystick(joystickX, joystickY, 8);
     }
-    drawPreviewPoint();
-    drawPreviewLine();
-    drawPreviewPolygon();
-    drawPoint();
-    drawLines();
-    drawPolygon();
-    drawSelectedObject();
-    drawTransformInfo();
-    drawMessage();
+    drawPreviewPoint(currentMode, isDrawing,tempPoint);
+    drawPreviewLine(currentMode,isDrawing,tempPoint,colorLoading_r,colorLoading_g,colorLoading_b,tempLine);
+    drawPreviewPolygon(isDrawingPolygon,colorLoading_r,colorLoading_g,colorLoading_b,tempMesh);
+    drawPoint(points,pointCount,isSelected,IdSelectedPoint);
+    drawLines(lines, lineCount,IdSelectedLine,isSelected);
+    drawPolygon(meshes,meshCount,IdSelectedPolygon, isSelected);
+    drawSelectedObject(isSelected,IdSelectedPoint,IdSelectedLine,IdSelectedPolygon,points,lines,meshes);
+    drawTransformInfo(isSelected,IdSelectedPoint,IdSelectedLine,IdSelectedPolygon,currentTransform, rotationAngle, scaleFactorX, scaleFactorY,shearFactorX,shearFactorY);
+    drawMessage(showMessage);
     glutSwapBuffers();
 }
 
@@ -1920,7 +1091,7 @@ int main(int argc, char **argv)
     initLines();
     initPoints();
     initPolygons();
-    loadObjectsFromFile("objetos.txt");
+    loadObjectsFromFile("objetos.txt", &pointCount, &lineCount, &meshCount, &points, &lines, &meshes, &tempMesh);
     glutJoystickFunc(joystick, 10);
     glutReshapeFunc(reshape);
     glutDisplayFunc(display);
