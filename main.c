@@ -40,7 +40,8 @@ typedef enum
     SAVE_MESH,
     LOAD_MESH,
     DELETED,
-    NONE_MESSAGE
+    NONE_MESSAGE,
+    IN_CONCERT
 } MESSAGE;
 
 typedef enum
@@ -66,6 +67,10 @@ Line tempLine;
 int pointCount = 0, lineCount = 0, meshCount = 0;
 int idDrawing = 0, isDrawingPolygon = 0, isSelected;
 MESSAGE showMessage = NONE_MESSAGE;
+
+int joystickActive = 0;
+int joystickButton = 0;
+int joystickX = 400, joystickY = 400;
 
 int IdSelectedLine = -1;
 int IdSelectedPoint = -1;
@@ -137,6 +142,21 @@ void passiveMotion(int x, int y);
 void keyboard(unsigned char key, int x, int y);
 Point scalePoint(Point point, Point reference, float scaleX, float scaleY);
 
+int *windowSize()
+{
+    int *window = (int *)malloc(2 * sizeof(int));
+    if (window == NULL)
+    {
+        printf("Erro ao alocar memoria!\n");
+        exit(1);
+    }
+
+    window[0] = (int)(0.8 * glutGet(GLUT_SCREEN_WIDTH));
+    window[1] = (int)(0.8 * glutGet(GLUT_SCREEN_HEIGHT));
+
+    return window;
+}
+
 void initLines()
 {
     if (lines == NULL)
@@ -155,19 +175,18 @@ void initPolygons()
         meshes = (Mesh *)malloc(MAX_SHAPES * sizeof(Mesh));
 }
 
-int *windowSize()
+void drawIconJoystick(int x, int y, int radius)
 {
-    int *window = (int *)malloc(2 * sizeof(int));
-    if (window == NULL)
+
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 360; i++)
     {
-        printf("Erro ao alocar memoria!\n");
-        exit(1);
+        float angle = i * PI / 180.0;
+        float dx = radius * cos(angle);
+        float dy = radius * sin(angle);
+        glVertex2f(x + dx, y + dy);
     }
-
-    window[0] = (int)(0.8 * glutGet(GLUT_SCREEN_WIDTH));
-    window[1] = (int)(0.8 * glutGet(GLUT_SCREEN_HEIGHT));
-
-    return window;
+    glEnd();
 }
 
 void drawPoint()
@@ -285,16 +304,16 @@ void drawMessage()
     switch (showMessage)
     {
     case SAVE_MESH:
-        printf("nop\n");
         msg = "Arquivo salvo com sucesso!";
         break;
     case LOAD_MESH:
-        printf("em\n");
         msg = "Arquivo carregado com sucesso!";
         break;
     case DELETED:
-        printf("em\n");
         msg = "Objeto deletado!";
+        break;
+    case IN_CONCERT:
+        msg = "FUncionalidade em manutencao, sentimos muito!";
         break;
     default:
         msg = "PAINT - PINTA COM GL";
@@ -1127,6 +1146,77 @@ void keyboard(unsigned char key, int x, int y)
     glutPostRedisplay();
 }
 
+void joystick(int unsigned buttonMask, int x, int y, int z)
+{
+    int *window = windowSize();
+
+    int moveX = 0, moveY = 0;
+    int normX = joystickX;
+    int normY = joystickY;
+
+    if (x > 0)
+        moveX = x / 80;
+    else if (x < 0)
+        moveX = x / 80;
+
+    if (y > 0)
+        moveY = -y / 80;
+    else if (y < 0)
+        moveY = -y / 80;
+
+    joystickX += moveX;
+    joystickY += moveY;
+
+    joystickActive = (x != 0 || y != 0);
+
+    if (joystickX < 0)
+        joystickX = 0;
+    if (joystickX > window[0])
+        joystickX = window[0];
+    if (joystickY < 0)
+        joystickY = 0;
+    if (joystickY > window[1])
+        joystickY = window[1];
+
+    // printf("Joystick: Posição (%d, %d), Botões: %x\n", joystickX, joystickY, buttonMask);
+    switch (buttonMask) {
+        case 1: // quadrado
+            saveObjectsToFile("objetos.txt");
+            showMessage = SAVE_MESH;
+            glutTimerFunc(2000, hideMessage, 0);
+            break;
+    
+        case 2: // x
+            showMessage = LOAD_MESH;
+            loadObjectsFromFile("objetos.txt");
+            glutTimerFunc(2000, hideMessage, 0);
+            break;
+    
+        case 4: // bolinha
+        case 8: // triangulo
+        case 16: // L1
+        case 32: // r1
+        case 64: // l2
+        case 128: // r1
+        case 256: // share
+        case 512: // options
+        case 1024: // l3
+        case 2048: // r3
+        case 4096: // ps
+        case 8192: // touchpad
+            showMessage = IN_CONCERT;
+            glutTimerFunc(2000, hideMessage, 0);
+            break;
+    
+        default:
+            // Caso o buttonMask não corresponda a nenhum dos valores
+            break;
+    }
+    printf("%d \n", buttonMask);
+
+    glutPostRedisplay();
+}
+
 void reshape(int width, int height)
 {
     if (height == 0)
@@ -1557,7 +1647,19 @@ void specialKeys(int key, int x, int y)
 
 void passiveMotion(int x, int y)
 {
-    printf("Mouse movido para (%d, %d)\n", x, y);
+    int *window = windowSize();
+    if (x > 0 || y > 0 || x < window[0] || y < window[1])
+    {
+        // Se o mouse está fora da janela
+        glutSetCursor(GLUT_CURSOR_LEFT_ARROW); // Cursor normal
+        joystickActive = 1;                    // Ativa o joystick
+    }
+    else
+    {
+        // Se o mouse está dentro da janela
+        glutSetCursor(GLUT_CURSOR_NONE); // Esconde o cursor
+        joystickActive = 0;              // Desativa o joystick
+    }
 }
 
 void timer(int value)
@@ -1580,6 +1682,12 @@ void display()
     glClear(GL_COLOR_BUFFER_BIT);
     glColor3f(0.0, 0.0, 0.0);
     glLineWidth(2.0);
+
+    if (joystickActive)
+    {
+        glutSetCursor(GLUT_CURSOR_NONE);
+        drawIconJoystick(joystickX, joystickY, 5);
+    }
     drawPreviewPoint();
     drawPreviewLine();
     drawPreviewPolygon();
@@ -1604,8 +1712,10 @@ int main(int argc, char **argv)
     initPoints();
     initPolygons();
     loadObjectsFromFile("objetos.txt");
+    glutJoystickFunc(joystick, 10);
     glutReshapeFunc(reshape);
     glutDisplayFunc(display);
+    glutPassiveMotionFunc(passiveMotion);
     glutMouseFunc(mouse);
     // caso queira ver o tempo passando com o decorrer do programa paint
     // timer(0);
@@ -1614,6 +1724,7 @@ int main(int argc, char **argv)
     glutMotionFunc(motion);
     glutSpecialFunc(specialKeys);
     glutKeyboardFunc(keyboard);
+
     glutMainLoop();
 
     printf("\n\n===== OpenGL Paint =====\n");
