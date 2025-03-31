@@ -2,16 +2,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
 #define MAX_POLYGON_POINTS 100
 #define MAX_SHAPES 1000
 #define CIRCLE_SEGMENTS 12
 #define POINT_RADIUS 3.0f
 #define PI 3.14159265358979323846
 #define SELECTION_THRESHOLD 10.0
-
-#define WIDTH 800
-#define HEIGHT 600
 
 typedef struct
 {
@@ -35,13 +31,21 @@ typedef enum
     LINE,
     POLYGON,
     CIRCLE,
-    SELECT,
+    NONE_MESH,
     SELECTION
 } Mode;
 
 typedef enum
 {
-    NONE,
+    SAVE_MESH,
+    LOAD_MESH,
+    DELETED,
+    NONE_MESSAGE
+} MESSAGE;
+
+typedef enum
+{
+    NONE_TRANSFORMER,
     TRANSLATE,
     ROTATE,
     SCALE,
@@ -61,7 +65,7 @@ Line tempLine;
 
 int pointCount = 0, lineCount = 0, meshCount = 0;
 int idDrawing = 0, isDrawingPolygon = 0, isSelected;
-int showMessage = 0;
+MESSAGE showMessage = NONE_MESSAGE;
 
 int IdSelectedLine = -1;
 int IdSelectedPoint = -1;
@@ -83,8 +87,8 @@ int mirrorDirection = 0;
 float shearFactorX = 0.0f;
 float shearFactorY = 0.0f;
 
-TransformMode currentTransform = NONE;
-Mode currentMode = VERTICE;
+TransformMode currentTransform = NONE_TRANSFORMER;
+Mode currentMode = NONE_MESH;
 float colorLoading_r = 0.1f, colorLoading_g = 0.5f, colorLoading_b = 0.3f;
 
 int saveObjectsToFile(const char *filename);
@@ -120,8 +124,12 @@ void mirrorPolygon(int id, int direction);
 void shearPoint(int id, float sx, float sy);
 void shearLine(int id, float sx, float sy);
 void shearPolygon(int id, float sx, float sy);
+void drawMessage();
 Point calculatePolygonCenter(Mesh m);
 Point calculateLineCenter(Line l);
+int *windowSize();
+void deleteSelectedObject();
+void hideMessage(int value);
 void mouse(int button, int state, int x, int y);
 void motion(int x, int y);
 void timer(int value);
@@ -145,6 +153,21 @@ void initPolygons()
 {
     if (meshes == NULL)
         meshes = (Mesh *)malloc(MAX_SHAPES * sizeof(Mesh));
+}
+
+int *windowSize()
+{
+    int *window = (int *)malloc(2 * sizeof(int));
+    if (window == NULL)
+    {
+        printf("Erro ao alocar memoria!\n");
+        exit(1);
+    }
+
+    window[0] = (int)(0.8 * glutGet(GLUT_SCREEN_WIDTH));
+    window[1] = (int)(0.8 * glutGet(GLUT_SCREEN_HEIGHT));
+
+    return window;
 }
 
 void drawPoint()
@@ -236,6 +259,51 @@ void drawPreviewPolygon()
         }
         glColor3f(0.0f, 0.0f, 0.0f);
         glEnd();
+    }
+}
+
+void drawMessage()
+{
+    int *window = windowSize();
+    switch (showMessage)
+    {
+    case SAVE_MESH:
+        glColor3f(0, 0.7, 0);
+    case LOAD_MESH:
+        glColor3f(0.6, 0.9, 0);
+        break;
+    case DELETED:
+        glColor3f(0.8, 0.0, 0.1);
+        break;
+    default:
+        glColor3f(0.0, 0.0, 0.0);
+        break;
+    }
+    glRasterPos2f((window[0] * 3) / 7, window[1] - 20);
+
+    const char *msg;
+    switch (showMessage)
+    {
+    case SAVE_MESH:
+        printf("nop\n");
+        msg = "Arquivo salvo com sucesso!";
+        break;
+    case LOAD_MESH:
+        printf("em\n");
+        msg = "Arquivo carregado com sucesso!";
+        break;
+    case DELETED:
+        printf("em\n");
+        msg = "Objeto deletado!";
+        break;
+    default:
+        msg = "PAINT - PINTA COM GL";
+        break;
+    }
+
+    for (const char *c = msg; *c != '\0'; c++)
+    {
+        glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
     }
 }
 
@@ -409,13 +477,12 @@ int loadObjectsFromFile(const char *filename)
 
 void hideMessage(int value)
 {
-    showMessage = 0;
+    showMessage = NONE_MESSAGE;
     glutPostRedisplay();
 }
 
 void drawSelectedObject()
 {
-    // Desenha um indicador de sele��o (c�rculo) ao redor do objeto selecionado
     if (isSelected)
     {
         glColor3f(0.0f, 0.5f, 1.0f);
@@ -453,8 +520,6 @@ void drawSelectedObject()
         else if (IdSelectedPolygon >= 0)
         {
             Point center = calculatePolygonCenter(meshes[IdSelectedPolygon]);
-
-            // Encontra o raio baseado no ponto mais distante
             float maxDist = 0.0f;
             for (int j = 0; j < meshes[IdSelectedPolygon].numberPoints; j++)
             {
@@ -462,7 +527,6 @@ void drawSelectedObject()
                 if (dist > maxDist)
                     maxDist = dist;
             }
-
             float radius = maxDist + 10.0f;
             int segments = 20;
             glBegin(GL_LINE_LOOP);
@@ -480,7 +544,6 @@ void drawSelectedObject()
 
 void drawTransformInfo()
 {
-    // Exibe informa��es sobre a transforma��o atual no canto inferior esquerdo
     glColor3f(0.0f, 0.0f, 0.0f);
     glRasterPos2i(10, 10);
 
@@ -494,21 +557,21 @@ void drawTransformInfo()
         else if (IdSelectedLine >= 0)
             objectType = "Linha";
         else if (IdSelectedPolygon >= 0)
-            objectType = "Pol�gono";
+            objectType = "Poligono";
 
         switch (currentTransform)
         {
         case TRANSLATE:
-            sprintf(info, "Transla��o de %s [Setas]", objectType);
+            sprintf(info, "Translacao de %s [Setas]", objectType);
             break;
         case ROTATE:
-            sprintf(info, "Rota��o de %s [A/D] �ngulo: %.1f�", objectType, rotationAngle);
+            sprintf(info, "Rotacao de %s [A/D] angulo: %.1f graus", objectType, rotationAngle);
             break;
         case SCALE:
             sprintf(info, "Escala de %s [+/-] X:%.1f Y:%.1f", objectType, scaleFactorX, scaleFactorY);
             break;
         case MIRROR:
-            sprintf(info, "Reflex�o de %s [X/Y]", objectType);
+            sprintf(info, "Reflexao de %s [X/Y]", objectType);
             break;
         case SHEAR:
             sprintf(info, "Cisalhamento de %s [Shift+Setas] X:%.1f Y:%.1f", objectType, shearFactorX, shearFactorY);
@@ -539,17 +602,14 @@ float pointToLineDistance(Point p, Line l)
     float x2 = l.end.x;
     float y2 = l.end.y;
 
-    // Comprimento da linha ao quadrado
     float l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
     if (l2 == 0.0)
-        return distance(p, l.init); // Linha � um ponto
+        return distance(p, l.init);
 
-    // Proje��o do ponto na linha, parametrizada como 0 <= t <= 1
     float t = ((x0 - x1) * (x2 - x1) + (y0 - y1) * (y2 - y1)) / l2;
     t = (t < 0) ? 0 : (t > 1) ? 1
                               : t;
 
-    // Ponto mais pr�ximo na linha
     float projx = x1 + t * (x2 - x1);
     float projy = y1 + t * (y2 - y1);
 
@@ -612,7 +672,6 @@ int selectPolygon(int x, int y)
 {
     Point clickPoint = {x, y};
 
-    // Primeiro verifica se o clique est� dentro de algum pol�gono
     for (int i = 0; i < meshCount; i++)
     {
         if (isPointInPolygon(clickPoint, meshes[i]))
@@ -621,7 +680,6 @@ int selectPolygon(int x, int y)
         }
     }
 
-    // Se n�o estiver dentro, verifica se est� pr�ximo do contorno
     float minDist = SELECTION_THRESHOLD;
     int selectedId = -1;
 
@@ -664,7 +722,6 @@ Point calculatePolygonCenter(Mesh m)
     return center;
 }
 
-// Fun��es de transforma��o
 void translatePoint(int id, float dx, float dy)
 {
     points[id].x += dx;
@@ -690,7 +747,6 @@ void translatePolygon(int id, float dx, float dy)
 
 void rotatePoint(int id, float angle)
 {
-    // Rota��o em rela��o � origem
     float angleRad = angle * (PI / 180.0f);
     float s = sin(angleRad);
     float c = cos(angleRad);
@@ -707,15 +763,12 @@ void rotatePointAroundCenter(Point *p, Point center, float angle)
     float s = sin(angleRad);
     float c = cos(angleRad);
 
-    // Translate point to origin
     float x = p->x - center.x;
     float y = p->y - center.y;
 
-    // Rotate point
     float xnew = x * c - y * s;
     float ynew = x * s + y * c;
 
-    // Translate point back
     p->x = xnew + center.x;
     p->y = ynew + center.y;
 }
@@ -738,15 +791,12 @@ void rotatePolygon(int id, float angle)
 
 void scalePointAroundCenter(Point *p, Point center, float sx, float sy)
 {
-    // Translate point to origin
     float x = p->x - center.x;
     float y = p->y - center.y;
 
-    // Scale point
     x *= sx;
     y *= sy;
 
-    // Translate point back
     p->x = x + center.x;
     p->y = y + center.y;
 }
@@ -770,18 +820,17 @@ void scalePolygon(int id, float sx, float sy)
 void mirrorPointAroundAxis(Point *p, Point center, int direction)
 {
     if (direction == 0)
-    { // Horizontal (em rela��o ao eixo y)
+    {
         p->x = 2 * center.x - p->x;
     }
     else
-    { // Vertical (em rela��o ao eixo x)
+    {
         p->y = 2 * center.y - p->y;
     }
 }
 
 void mirrorPoint(int id, int direction)
 {
-    // Para pontos, espelhamos em rela��o � origem
     Point origin = {0, 0};
     mirrorPointAroundAxis(&points[id], origin, direction);
 }
@@ -804,15 +853,12 @@ void mirrorPolygon(int id, int direction)
 
 void shearPointAroundCenter(Point *p, Point center, float sx, float sy)
 {
-    // Translate point to origin
     float x = p->x - center.x;
     float y = p->y - center.y;
 
-    // Apply shear
     float xnew = x + sx * y;
     float ynew = sy * x + y;
 
-    // Translate point back
     p->x = xnew + center.x;
     p->y = ynew + center.y;
 }
@@ -839,16 +885,57 @@ void shearPolygon(int id, float sx, float sy)
     }
 }
 
+void deleteSelectedObject()
+{
+    if (!isSelected)
+        return;
+
+    if (IdSelectedPoint >= 0)
+    {
+        for (int i = IdSelectedPoint; i < pointCount - 1; i++)
+        {
+            points[i] = points[i + 1];
+        }
+        pointCount--;
+        printf("Ponto ID %d foi deletado\n", IdSelectedPoint);
+    }
+    else if (IdSelectedLine >= 0)
+    {
+        for (int i = IdSelectedLine; i < lineCount - 1; i++)
+        {
+            lines[i] = lines[i + 1];
+        }
+        lineCount--;
+        printf("Linha ID %d foi deletado\n", IdSelectedLine);
+    }
+    else if (IdSelectedPolygon >= 0)
+    {
+        for (int i = IdSelectedPolygon; i < meshCount - 1; i++)
+        {
+            meshes[i] = meshes[i + 1];
+        }
+        meshCount--;
+        printf("Poligono ID %d foi deletado\n", IdSelectedPolygon);
+    }
+
+    IdSelectedPoint = -1;
+    IdSelectedLine = -1;
+    IdSelectedPolygon = -1;
+    isSelected = 0;
+    currentTransform = NONE_TRANSFORMER;
+}
+
 void keyboard(unsigned char key, int x, int y)
 {
+    int *window = windowSize();
     switch (key)
     {
     case 'p':
-        glutSetCursor(GLUT_CURSOR_INFO);
+        glutSetCursor(GLUT_CURSOR_CROSSHAIR);
         currentMode = POLYGON;
         isDrawingPolygon = 1;
         tempMesh.numberPoints = 0;
-        printf("Modo: Desenhar Polígono\n");
+        printf("Modo: Desenhar Poligono\n");
         break;
     case 'l':
         glutSetCursor(GLUT_CURSOR_CROSSHAIR);
@@ -856,21 +943,21 @@ void keyboard(unsigned char key, int x, int y)
         printf("Modo: Desenhar Linha\n");
         break;
     case 'v':
-        glutSetCursor(GLUT_CURSOR_RIGHT_ARROW);
+        glutSetCursor(GLUT_CURSOR_CROSSHAIR);
         currentMode = VERTICE;
-        printf("Modo: Desenhar Vértice\n");
+        printf("Modo: Desenhar Vertice\n");
         break;
     case 's':
         glutSetCursor(GLUT_CURSOR_CYCLE);
         currentMode = SELECTION;
-        printf("Modo: Seleção\n");
+        printf("Modo: Selecao\n");
         break;
     case 't':
         if (isSelected)
         {
             glutSetCursor(GLUT_CURSOR_CYCLE);
             currentTransform = TRANSLATE;
-            printf("Transformação: Translação\n");
+            printf("Transformacao: Translacao\n");
         }
         break;
     case 'r':
@@ -878,7 +965,7 @@ void keyboard(unsigned char key, int x, int y)
         {
             glutSetCursor(GLUT_CURSOR_UP_DOWN);
             currentTransform = ROTATE;
-            printf("Transformação: Rotação\n");
+            printf("Transformacao: Rotacao\n");
         }
         break;
     case 'e':
@@ -886,56 +973,58 @@ void keyboard(unsigned char key, int x, int y)
         {
             glutSetCursor(GLUT_CURSOR_SPRAY);
             currentTransform = SCALE;
-            printf("Transformação: Escala\n");
+            printf("Transformacao: Escala\n");
         }
         break;
     case 'm':
         if (isSelected)
         {
-            glutSetCursor(GLUT_CURSOR_HELP);
+            glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
             currentTransform = MIRROR;
-            printf("Transformação: Reflexão\n");
+            printf("Transformacao: Reflexao\n");
         }
         break;
     case 'c':
         if (isSelected)
         {
-            glutSetCursor(GLUT_CURSOR_DESTROY);
+            glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
             currentTransform = SHEAR;
-            printf("Transformação: Cisalhamento\n");
+            printf("Transformacao: Cisalhamento\n");
         }
         break;
     case 'h':
-        printf("===== OpenGL Paint com Transforma��es Geom�tricas =====\n");
+        printf("\n\n===== OpenGL Paint com Transforma��es Geom�tricas =====\n");
         printf("Modos de desenho:\n");
-        printf("  v: Modo V�rtice\n");
+        printf("  v: Modo Vertice\n");
         printf("  l: Modo Linha\n");
-        printf("  p: Modo Pol�gono\n");
-        printf("  s: Modo Sele��o\n\n");
+        printf("  p: Modo Poligono\n");
+        printf("  s: Modo Selecao\n\n");
 
-        printf("Transforma��es (ap�s selecionar um objeto):\n");
-        printf("  t: Ativar transla��o (use as setas)\n");
-        printf("  r: Ativar rota��o (use A/D ou roda do mouse)\n");
+        printf("Transformacoes (apos selecionar um objeto):\n");
+        printf("  t: Ativar translacao (use as setas)\n");
+        printf("  r: Ativar rotacao (use A/D ou roda do mouse)\n");
         printf("  e: Ativar escala (use +/- ou roda do mouse)\n");
-        printf("  m: Ativar reflex�o (use x/y para espelhar)\n");
+        printf("  m: Ativar reflexao (use x/y para espelhar)\n");
         printf("  c: Ativar cisalhamento (use shift + setas)\n\n");
+        printf("  D: Deletar um objeto\n");
 
-        printf("Outras opera��es:\n");
-        printf("  Bot�o do meio do mouse: Alternar entre transforma��es\n");
-        printf("  Bot�o direito: Cancelar sele��o ou fechar pol�gono\n");
+        printf("Outras operacoes:\n");
+        printf("  Botao do meio do mouse: Alternar entre transformacoes\n");
+        printf("  Botao direito: Cancelar selecao ou fechar poligono\n");
+
         break;
     case 'x':
         if (isSelected && currentTransform == MIRROR)
         {
             glutSetCursor(GLUT_CURSOR_WAIT);
-            mirrorDirection = 0; // Horizontal
+            mirrorDirection = 0;
             if (IdSelectedPoint >= 0)
                 mirrorPoint(IdSelectedPoint, 0);
             else if (IdSelectedLine >= 0)
                 mirrorLine(IdSelectedLine, 0);
             else if (IdSelectedPolygon >= 0)
                 mirrorPolygon(IdSelectedPolygon, 0);
-            printf("Reflexão horizontal aplicada\n");
+            printf("Reflexao horizontal aplicada\n");
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
         break;
@@ -943,14 +1032,14 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected && currentTransform == MIRROR)
         {
             glutSetCursor(GLUT_CURSOR_WAIT);
-            mirrorDirection = 1; // Vertical
+            mirrorDirection = 1;
             if (IdSelectedPoint >= 0)
                 mirrorPoint(IdSelectedPoint, 1);
             else if (IdSelectedLine >= 0)
                 mirrorLine(IdSelectedLine, 1);
             else if (IdSelectedPolygon >= 0)
                 mirrorPolygon(IdSelectedPolygon, 1);
-            printf("Reflexão vertical aplicada\n");
+            printf("Reflexao vertical aplicada\n");
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
         break;
@@ -1010,17 +1099,25 @@ void keyboard(unsigned char key, int x, int y)
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         }
         break;
+    case 'D':
+        glutSetCursor(GLUT_CURSOR_WAIT);
+        showMessage = DELETED;
+        deleteSelectedObject();
+        glutTimerFunc(2000, hideMessage, 0);
+        glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
+        break;
     case 'S':
         glutSetCursor(GLUT_CURSOR_WAIT);
         saveObjectsToFile("objetos.txt");
-        showMessage = 1;
-        glutPostRedisplay();
-        glutTimerFunc(3000, hideMessage, 0);
+        showMessage = SAVE_MESH;
+        glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         break;
     case 'L':
         glutSetCursor(GLUT_CURSOR_WAIT);
+        showMessage = LOAD_MESH;
         loadObjectsFromFile("objetos.txt");
+        glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         break;
     case 27:
@@ -1045,14 +1142,14 @@ void reshape(int width, int height)
 
 void mouse(int button, int state, int x, int y)
 {
+    int *window = windowSize();
     int normX = x;
-    int normY = HEIGHT - y; // Inverter Y para coordenadas OpenGL
+    int normY = window[1] - y;
 
     if (button == GLUT_LEFT_BUTTON)
     {
         if (state == GLUT_DOWN)
         {
-            // Armazena a posi��o atual do mouse para transforma��es
             lastMousePos.x = normX;
             lastMousePos.y = normY;
 
@@ -1066,25 +1163,22 @@ void mouse(int button, int state, int x, int y)
             case LINE:
                 tempLine.init = (Point){normX, normY};
                 idDrawing = 1;
-                printf("In�cio da linha: (%d, %d) - Tipo: Linha\n", normX, normY);
+                printf("Inicio da linha: (%d, %d) - Tipo: Linha\n", normX, normY);
                 break;
 
             case POLYGON:
                 if (isDrawingPolygon && tempMesh.numberPoints < MAX_POLYGON_POINTS)
                 {
                     tempMesh.vertices[tempMesh.numberPoints++] = (Point){normX, normY};
-                    printf("Ponto do pol�gono: (%d, %d) - Tipo: Pol�gono\n", normX, normY);
+                    printf("Ponto do poligono: (%d, %d) - Tipo: Poligono\n", normX, normY);
                 }
                 break;
 
             case SELECTION:
-                // Reseta sele��es anteriores
                 IdSelectedPoint = -1;
                 IdSelectedLine = -1;
                 IdSelectedPolygon = -1;
                 isSelected = 0;
-
-                // Tenta selecionar na ordem: pontos, linhas, pol�gonos
                 IdSelectedPoint = selectPoint(normX, normY);
 
                 if (IdSelectedPoint >= 0)
@@ -1108,12 +1202,11 @@ void mouse(int button, int state, int x, int y)
                         if (IdSelectedPolygon >= 0)
                         {
                             isSelected = 1;
-                            printf("Pol�gono selecionado: ID %d\n", IdSelectedPolygon);
+                            printf("Poligono selecionado: ID %d\n", IdSelectedPolygon);
                         }
                     }
                 }
 
-                // Se um objeto foi selecionado, define o ponto de refer�ncia
                 if (isSelected)
                 {
                     if (IdSelectedPoint >= 0)
@@ -1147,41 +1240,38 @@ void mouse(int button, int state, int x, int y)
     {
         if (currentMode == POLYGON && isDrawingPolygon)
         {
-            // Fecha o pol�gono
             meshes[meshCount++] = tempMesh;
             tempMesh.numberPoints = 0;
             isDrawingPolygon = 0;
-            printf("Pol�gono fechado e armazenado.\n");
+            printf("Poligono fechado e armazenado.\n");
         }
         else if (isSelected)
         {
-            // Reseta a sele��o com clique direito
             IdSelectedPoint = -1;
             IdSelectedLine = -1;
             IdSelectedPolygon = -1;
             isSelected = 0;
-            currentTransform = NONE;
+            currentTransform = NONE_TRANSFORMER;
             printf("Sele��o removida.\n");
         }
     }
     else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN && isSelected)
     {
-        // Bot�o do meio alterna entre modos de transforma��o
         currentTransform = (currentTransform + 1) % 5;
 
         switch (currentTransform)
         {
         case TRANSLATE:
-            printf("Modo: Transla��o\n");
+            printf("Modo: Translacao\n");
             break;
         case ROTATE:
-            printf("Modo: Rota��o\n");
+            printf("Modo: Rotacao\n");
             break;
         case SCALE:
             printf("Modo: Escala\n");
             break;
         case MIRROR:
-            printf("Modo: Reflex�o\n");
+            printf("Modo: Reflexao\n");
             break;
         case SHEAR:
             printf("Modo: Cisalhamento\n");
@@ -1189,8 +1279,7 @@ void mouse(int button, int state, int x, int y)
         }
     }
     else if (button == 3 && isSelected)
-    { // Scroll up
-        // Aplica transforma��o espec�fica ao objeto selecionado
+    {
         switch (currentTransform)
         {
         case SCALE:
@@ -1225,8 +1314,7 @@ void mouse(int button, int state, int x, int y)
         }
     }
     else if (button == 4 && isSelected)
-    { // Scroll down
-        // Aplica transforma��o espec�fica ao objeto selecionado
+    {
         switch (currentTransform)
         {
         case SCALE:
@@ -1266,8 +1354,9 @@ void mouse(int button, int state, int x, int y)
 
 void motion(int x, int y)
 {
+    int *window = windowSize();
     int normX = x;
-    int normY = HEIGHT - y;
+    int normY = window[1] - y;
 
     switch (currentMode)
     {
@@ -1280,7 +1369,6 @@ void motion(int x, int y)
     case POLYGON:
         if (isDrawingPolygon && tempMesh.numberPoints > 0)
         {
-            // Atualiza o �ltimo ponto adicionado enquanto movimenta o mouse
             tempMesh.vertices[tempMesh.numberPoints - 1] = (Point){normX, normY};
         }
         break;
@@ -1474,15 +1562,17 @@ void passiveMotion(int x, int y)
 
 void timer(int value)
 {
-    printf("Timer ativado após %d ms!\n", value);
-    glutTimerFunc(1000, timer, value + 1); // Chama de novo após 1 segundo
+    printf("Timer ativado apos %d ms!\n", value);
+    glutTimerFunc(1000, timer, value + 1);
 }
 
 void init()
 {
+    int *window = windowSize();
     glClearColor(1, 1, 1, 1);
     glMatrixMode(GL_PROJECTION);
-    gluOrtho2D(0, WIDTH, 0, HEIGHT);
+    gluOrtho2D(0, window[0], 0, window[1]);
+    glViewport(0, 0, window[0], window[1]);
 }
 
 void display()
@@ -1498,16 +1588,7 @@ void display()
     drawPolygon();
     drawSelectedObject();
     drawTransformInfo();
-    if (showMessage)
-    {
-        glColor3f(0, 0.7, 0);
-        glRasterPos2f(300, 560);
-        const char *msg = "Arquivo salvo com sucesso!";
-        for (const char *c = msg; *c != '\0'; c++)
-        {
-            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
-        }
-    }
+    drawMessage();
     glutSwapBuffers();
 }
 
@@ -1515,7 +1596,8 @@ int main(int argc, char **argv)
 {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
-    glutInitWindowSize(WIDTH, HEIGHT);
+    int *window = windowSize();
+    glutInitWindowSize(window[0], window[1]);
     glutCreateWindow("OpenGL Paint - Simulator");
     init();
     initLines();
@@ -1525,6 +1607,8 @@ int main(int argc, char **argv)
     glutReshapeFunc(reshape);
     glutDisplayFunc(display);
     glutMouseFunc(mouse);
+    // caso queira ver o tempo passando com o decorrer do programa paint
+    // timer(0);
     // caso o usuario queira ver as coordenadas do mouse pelo terminal
     // glutPassiveMotionFunc(passiveMotion);
     glutMotionFunc(motion);
@@ -1532,23 +1616,23 @@ int main(int argc, char **argv)
     glutKeyboardFunc(keyboard);
     glutMainLoop();
 
-    printf("===== OpenGL Paint com Transforma��es Geom�tricas =====\n");
+    printf("\n\n===== OpenGL Paint =====\n");
     printf("Modos de desenho:\n");
-    printf("  v: Modo V�rtice\n");
+    printf("  v: Modo Virtice\n");
     printf("  l: Modo Linha\n");
-    printf("  p: Modo Pol�gono\n");
-    printf("  s: Modo Sele��o\n\n");
+    printf("  p: Modo Poligono\n");
+    printf("  s: Modo Selecao\n\n");
 
-    printf("Transforma��es (ap�s selecionar um objeto):\n");
-    printf("  t: Ativar transla��o (use as setas)\n");
-    printf("  r: Ativar rota��o (use A/D ou roda do mouse)\n");
+    printf("Transformacoes (apos selecionar um objeto):\n");
+    printf("  t: Ativar translacao (use as setas)\n");
+    printf("  r: Ativar rotacao (use A/D ou roda do mouse)\n");
     printf("  e: Ativar escala (use +/- ou roda do mouse)\n");
-    printf("  m: Ativar reflex�o (use x/y para espelhar)\n");
+    printf("  m: Ativar reflexao (use x/y para espelhar)\n");
     printf("  c: Ativar cisalhamento (use shift + setas)\n\n");
 
-    printf("Outras opera��es:\n");
-    printf("  Bot�o do meio do mouse: Alternar entre transforma��es\n");
-    printf("  Bot�o direito: Cancelar sele��o ou fechar pol�gono\n");
+    printf("Outras operacoes:\n");
+    printf("  Botao do meio do mouse: Alternar entre transformacoes\n");
+    printf("  Botao direito: Cancelar selecao ou fechar poligono\n");
 
     if (points)
         free(points);
