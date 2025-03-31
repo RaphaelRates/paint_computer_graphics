@@ -9,6 +9,21 @@
 #define PI 3.14159265358979323846
 #define SELECTION_THRESHOLD 10.0
 
+#define JOYSTICK_X 1
+#define JOYSTICK_CIRCLE 2
+#define JOYSTICK_TRIANGLE 8
+#define JOYSTICK_QUAD 4
+#define JOYSTICK_L1 16
+#define JOYSTICK_R1 32
+#define JOYSTICK_L2 64
+#define JOYSTICK_R2 128
+#define JOYSTICK_START 256
+#define JOYSTICK_OPT 512
+#define JOYSTICK_L3 1024
+#define JOYSTICK_R3 2048
+#define JOYSTICK_ICON_BUTTON 4096
+#define JOYSTICK_TOUCH 8192
+
 typedef struct
 {
     float x, y;
@@ -70,7 +85,10 @@ MESSAGE showMessage = NONE_MESSAGE;
 
 int joystickActive = 0;
 int joystickButton = 0;
+int buttonMask = 0;
 int joystickX = 400, joystickY = 400;
+int lastMouseX = -1, lastMouseY = -1;
+int MousseActvive = 1;
 
 int IdSelectedLine = -1;
 int IdSelectedPoint = -1;
@@ -94,6 +112,7 @@ float shearFactorY = 0.0f;
 
 TransformMode currentTransform = NONE_TRANSFORMER;
 Mode currentMode = NONE_MESH;
+int joystickMode = 0;
 float colorLoading_r = 0.1f, colorLoading_g = 0.5f, colorLoading_b = 0.3f;
 
 int saveObjectsToFile(const char *filename);
@@ -177,13 +196,23 @@ void initPolygons()
 
 void drawIconJoystick(int x, int y, int radius)
 {
-
+    glColor3f(0.5, 0.5, 0.5);
+    glBegin(GL_LINE_LOOP);
+    for (int i = 0; i < 360; i++)
+    {
+        float angle = i * PI / 180.0;
+        float dx = (radius + 2) * cos(angle);
+        float dy = (radius + 2) * sin(angle);
+        glVertex2f(x + dx, y + dy);
+    }
+    glEnd();
+    glColor3f(0.0, 0.8, 0.0);
     glBegin(GL_POLYGON);
     for (int i = 0; i < 360; i++)
     {
         float angle = i * PI / 180.0;
-        float dx = radius * cos(angle);
-        float dy = radius * sin(angle);
+        float dx = (radius)*cos(angle);
+        float dy = (radius)*sin(angle);
         glVertex2f(x + dx, y + dy);
     }
     glEnd();
@@ -951,6 +980,7 @@ void keyboard(unsigned char key, int x, int y)
     {
     case 'p':
         glutSetCursor(GLUT_CURSOR_CROSSHAIR);
+        joystickActive = 0;
         currentMode = POLYGON;
         isDrawingPolygon = 1;
         tempMesh.numberPoints = 0;
@@ -958,6 +988,7 @@ void keyboard(unsigned char key, int x, int y)
         break;
     case 'l':
         glutSetCursor(GLUT_CURSOR_CROSSHAIR);
+        joystickActive = 0;
         currentMode = LINE;
         printf("Modo: Desenhar Linha\n");
         break;
@@ -968,6 +999,7 @@ void keyboard(unsigned char key, int x, int y)
         break;
     case 's':
         glutSetCursor(GLUT_CURSOR_CYCLE);
+        joystickActive = 0;
         currentMode = SELECTION;
         printf("Modo: Selecao\n");
         break;
@@ -975,6 +1007,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected)
         {
             glutSetCursor(GLUT_CURSOR_CYCLE);
+            joystickActive = 0;
             currentTransform = TRANSLATE;
             printf("Transformacao: Translacao\n");
         }
@@ -983,6 +1016,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected)
         {
             glutSetCursor(GLUT_CURSOR_UP_DOWN);
+            joystickActive = 0;
             currentTransform = ROTATE;
             printf("Transformacao: Rotacao\n");
         }
@@ -991,6 +1025,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected)
         {
             glutSetCursor(GLUT_CURSOR_SPRAY);
+            joystickActive = 0;
             currentTransform = SCALE;
             printf("Transformacao: Escala\n");
         }
@@ -999,6 +1034,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected)
         {
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
+            joystickActive = 0;
             currentTransform = MIRROR;
             printf("Transformacao: Reflexao\n");
         }
@@ -1007,12 +1043,14 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected)
         {
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
+            joystickActive = 0;
             currentTransform = SHEAR;
             printf("Transformacao: Cisalhamento\n");
         }
         break;
     case 'h':
         printf("\n\n===== OpenGL Paint com Transforma��es Geom�tricas =====\n");
+        joystickActive = 0;
         printf("Modos de desenho:\n");
         printf("  v: Modo Vertice\n");
         printf("  l: Modo Linha\n");
@@ -1036,6 +1074,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected && currentTransform == MIRROR)
         {
             glutSetCursor(GLUT_CURSOR_WAIT);
+            joystickActive = 0;
             mirrorDirection = 0;
             if (IdSelectedPoint >= 0)
                 mirrorPoint(IdSelectedPoint, 0);
@@ -1051,6 +1090,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected && currentTransform == MIRROR)
         {
             glutSetCursor(GLUT_CURSOR_WAIT);
+            joystickActive = 0;
             mirrorDirection = 1;
             if (IdSelectedPoint >= 0)
                 mirrorPoint(IdSelectedPoint, 1);
@@ -1066,6 +1106,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected && currentTransform == ROTATE)
         {
             glutSetCursor(GLUT_CURSOR_WAIT);
+            joystickActive = 0;
             rotationAngle -= 5.0f;
             if (IdSelectedPoint >= 0)
                 rotatePoint(IdSelectedPoint, -5.0f);
@@ -1080,6 +1121,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected && currentTransform == ROTATE)
         {
             glutSetCursor(GLUT_CURSOR_WAIT);
+            joystickActive = 0;
             rotationAngle += 5.0f;
             if (IdSelectedPoint >= 0)
                 rotatePoint(IdSelectedPoint, 5.0f);
@@ -1095,6 +1137,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected && currentTransform == SCALE)
         {
             glutSetCursor(GLUT_CURSOR_WAIT);
+            joystickActive = 0;
             scaleFactorX *= 1.1f;
             scaleFactorY *= 1.1f;
             if (IdSelectedLine >= 0)
@@ -1109,6 +1152,7 @@ void keyboard(unsigned char key, int x, int y)
         if (isSelected && currentTransform == SCALE)
         {
             glutSetCursor(GLUT_CURSOR_WAIT);
+            joystickActive = 0;
             scaleFactorX *= 0.9f;
             scaleFactorY *= 0.9f;
             if (IdSelectedLine >= 0)
@@ -1120,6 +1164,7 @@ void keyboard(unsigned char key, int x, int y)
         break;
     case 'D':
         glutSetCursor(GLUT_CURSOR_WAIT);
+        joystickActive = 0;
         showMessage = DELETED;
         deleteSelectedObject();
         glutTimerFunc(2000, hideMessage, 0);
@@ -1127,13 +1172,17 @@ void keyboard(unsigned char key, int x, int y)
         break;
     case 'S':
         glutSetCursor(GLUT_CURSOR_WAIT);
+        joystickActive = 0;
         saveObjectsToFile("objetos.txt");
         showMessage = SAVE_MESH;
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
         break;
     case 'L':
+        if (joystickActive)
+            return;
         glutSetCursor(GLUT_CURSOR_WAIT);
+        joystickActive = 0;
         showMessage = LOAD_MESH;
         loadObjectsFromFile("objetos.txt");
         glutTimerFunc(2000, hideMessage, 0);
@@ -1146,7 +1195,7 @@ void keyboard(unsigned char key, int x, int y)
     glutPostRedisplay();
 }
 
-void joystick(int unsigned buttonMask, int x, int y, int z)
+void joystick(int unsigned buttons, int x, int y, int z)
 {
     int *window = windowSize();
 
@@ -1168,6 +1217,7 @@ void joystick(int unsigned buttonMask, int x, int y, int z)
     joystickY += moveY;
 
     joystickActive = (x != 0 || y != 0);
+    MousseActvive = !joystickActive;
 
     if (joystickX < 0)
         joystickX = 0;
@@ -1178,42 +1228,74 @@ void joystick(int unsigned buttonMask, int x, int y, int z)
     if (joystickY > window[1])
         joystickY = window[1];
 
-    // printf("Joystick: Posição (%d, %d), Botões: %x\n", joystickX, joystickY, buttonMask);
-    switch (buttonMask) {
-        case 1: // quadrado
-            saveObjectsToFile("objetos.txt");
-            showMessage = SAVE_MESH;
-            glutTimerFunc(2000, hideMessage, 0);
-            break;
-    
-        case 2: // x
+    int previousButtonMask = buttonMask;
+    buttonMask = buttons;
+    if (buttonMask != previousButtonMask)
+    {
+        switch (buttons)
+        {
+        case JOYSTICK_X: // X
             showMessage = LOAD_MESH;
             loadObjectsFromFile("objetos.txt");
             glutTimerFunc(2000, hideMessage, 0);
             break;
-    
-        case 4: // bolinha
-        case 8: // triangulo
-        case 16: // L1
-        case 32: // r1
-        case 64: // l2
-        case 128: // r1
-        case 256: // share
-        case 512: // options
-        case 1024: // l3
-        case 2048: // r3
-        case 4096: // ps
-        case 8192: // touchpad
+
+        case JOYSTICK_CIRCLE: // Bolinha
+            break;
+
+        case JOYSTICK_QUAD: // Quadrado
+            points[pointCount++] = (Point){joystickX, joystickY};
+            printf("Ponto criado: (%d, %d) - Tipo: Vertice\n", joystickX, joystickY);
+
+            break;
+        case JOYSTICK_TRIANGLE: // Triângulo
+            saveObjectsToFile("objetos.txt");
+            showMessage = SAVE_MESH;
+            glutTimerFunc(2000, hideMessage, 0);
+            break;
+
+        case JOYSTICK_L1: // L1
+            if (currentMode == SELECTION)
+            {
+                currentMode = VERTICE;
+            }
+            else
+            {
+                printf("Modo desenho: %d\n", currentMode);
+                currentMode++;
+            }
+            break;
+
+        case JOYSTICK_R1: // R1
+            if (currentTransform == SHEAR)
+            {
+                currentTransform = NONE_TRANSFORMER;
+            }
+            else
+            {
+                printf("Modo tranformacao: %d\n", currentTransform);
+                currentTransform++;
+            }
+            break;
+        case JOYSTICK_L2:          // L2
+        case JOYSTICK_R2:          // R2
+        case JOYSTICK_START:       // Share
+        case JOYSTICK_OPT:         // Options
+        case JOYSTICK_L3:          // L3
+        case JOYSTICK_R3:          // R3
+        case JOYSTICK_ICON_BUTTON: // PS
+            exit(0);
+            break;
+        case JOYSTICK_TOUCH: // Touchpad
             showMessage = IN_CONCERT;
             glutTimerFunc(2000, hideMessage, 0);
             break;
-    
-        default:
-            // Caso o buttonMask não corresponda a nenhum dos valores
-            break;
-    }
-    printf("%d \n", buttonMask);
 
+        default:
+            break;
+        }
+    }
+    // printf("%d %d\n", j)
     glutPostRedisplay();
 }
 
@@ -1648,24 +1730,21 @@ void specialKeys(int key, int x, int y)
 void passiveMotion(int x, int y)
 {
     int *window = windowSize();
-    if (x > 0 || y > 0 || x < window[0] || y < window[1])
+    if (MousseActvive)
     {
-        // Se o mouse está fora da janela
-        glutSetCursor(GLUT_CURSOR_LEFT_ARROW); // Cursor normal
-        joystickActive = 1;                    // Ativa o joystick
+        lastMouseX = x;
+        lastMouseY = y;
+        joystickActive = 0;
     }
     else
     {
-        // Se o mouse está dentro da janela
-        glutSetCursor(GLUT_CURSOR_NONE); // Esconde o cursor
-        joystickActive = 0;              // Desativa o joystick
+        glutSetCursor(GLUT_CURSOR_NONE);
     }
 }
 
 void timer(int value)
 {
-    printf("Timer ativado apos %d ms!\n", value);
-    glutTimerFunc(1000, timer, value + 1);
+    glutTimerFunc(10, timer, value + 1);
 }
 
 void init()
@@ -1682,11 +1761,9 @@ void display()
     glClear(GL_COLOR_BUFFER_BIT);
     glColor3f(0.0, 0.0, 0.0);
     glLineWidth(2.0);
-
     if (joystickActive)
     {
-        glutSetCursor(GLUT_CURSOR_NONE);
-        drawIconJoystick(joystickX, joystickY, 5);
+        drawIconJoystick(joystickX, joystickY, 8);
     }
     drawPreviewPoint();
     drawPreviewLine();
@@ -1716,11 +1793,9 @@ int main(int argc, char **argv)
     glutReshapeFunc(reshape);
     glutDisplayFunc(display);
     glutPassiveMotionFunc(passiveMotion);
+    timer(0);
     glutMouseFunc(mouse);
-    // caso queira ver o tempo passando com o decorrer do programa paint
-    // timer(0);
-    // caso o usuario queira ver as coordenadas do mouse pelo terminal
-    // glutPassiveMotionFunc(passiveMotion);
+
     glutMotionFunc(motion);
     glutSpecialFunc(specialKeys);
     glutKeyboardFunc(keyboard);
