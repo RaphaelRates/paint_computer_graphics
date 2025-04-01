@@ -136,10 +136,10 @@ void drawMessage(MESSAGE showMessage)
         msg = "Objeto deletado!";
         break;
     case IN_CONCERT:
-        msg = "FUncionalidade em manutencao, sentimos muito!";
+        msg = "Funcionalidade em manutencao, sentimos muito!";
         break;
     default:
-        msg = "PAINT - PINTA COM GL";
+        msg = "PAINT SIMULATOR";
         break;
     }
 

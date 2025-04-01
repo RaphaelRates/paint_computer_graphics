@@ -10,6 +10,30 @@
 #include <transformers.c>
 #include <calculate.c>
 
+#pragma pack(push, 1)
+typedef struct {
+    unsigned char  bfType[2];      // Tipo (BM)
+    unsigned int   bfSize;         // Tamanho do arquivo
+    unsigned short bfReserved1;    // Reservado (0)
+    unsigned short bfReserved2;    // Reservado (0)
+    unsigned int   bfOffBits;      // Offset dos dados da imagem
+} BMPHeader;
+
+typedef struct {
+    unsigned int   biSize;         
+    int            biWidth;        
+    int            biHeight;       
+    unsigned short biPlanes;       
+    unsigned short biBitCount;     
+    unsigned int   biCompression;  
+    unsigned int   biSizeImage;    
+    int            biXPelsPerMeter;                        
+    int            biYPelsPerMeter;                      
+    unsigned int   biClrUsed;                            
+    unsigned int   biClrImportant; 
+} BMPInfoHeader;
+#pragma pack(pop)
+
 //==================================================== VARIAVEIS ============================================================
 
 Point *points = NULL;
@@ -130,7 +154,7 @@ void deleteSelectedObject()
 }
 void drawIconJoystick(int x, int y, int radius)
 {
-    // Contorno cinza externo do joystick
+
     glColor3f(0.5, 0.5, 0.5);
     glBegin(GL_LINE_LOOP);
     for (int i = 0; i < 360; i++)
@@ -418,6 +442,38 @@ void keyboard(unsigned char key, int x, int y)
     glutPostRedisplay();
 }
 
+void saveScreenshotBMP(const char *filename, int width, int height) {
+    FILE *file = fopen(filename, "wb");
+    if (!file) {
+        printf("Erro ao abrir o arquivo para salvar.\n");
+        return;
+    }
+
+    BMPHeader bmpHeader = {{'B', 'M'}, 54 + 3 * width * height, 0, 0, 54};
+    BMPInfoHeader bmpInfoHeader = {
+        40, width, -height, 1, 24, 0, 3 * width * height, 2835, 2835, 0, 0
+    };
+
+    fwrite(&bmpHeader, sizeof(BMPHeader), 1, file);
+    fwrite(&bmpInfoHeader, sizeof(BMPInfoHeader), 1, file);
+
+    GLubyte *pixels = (GLubyte *)malloc(3 * width * height);
+    if (!pixels) {
+        printf("Erro ao alocar memoria.\n");
+        fclose(file);
+        return;
+    }
+
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+    fwrite(pixels, 3, width * height, file);
+
+    free(pixels);
+    fclose(file);
+    printf("Captura de tela salva como %s\n", filename);
+}
+
 void joystick(unsigned int buttons, int x, int y, int z)
 {
     int previousButtonMask = buttonMask;
@@ -428,6 +484,8 @@ void joystick(unsigned int buttons, int x, int y, int z)
     int *window = windowSize();
     int moveX = x / 80;
     int moveY = -y / 80;
+
+    int widthScreen = window[0], heightScreen = window[1];
 
     joystickX += moveX;
     joystickY += moveY;
@@ -449,8 +507,8 @@ void joystick(unsigned int buttons, int x, int y, int z)
     lastJoystickX = joystickX;
     lastJoystickY = joystickY;
 
-    // printf("dx: %2f dy: %2f | joystickX: %d joystickY: %d | lastX: %d lastY: %d , button: %d\n",
-    //        dx, dy, joystickX, joystickY, lastJoystickX, lastJoystickY, buttons);
+    printf("dx: %2f dy: %2f | joystickX: %d joystickY: %d | lastX: %d lastY: %d , button: %d\n",
+           dx, dy, joystickX, joystickY, lastJoystickX, lastJoystickY, buttons);
 
     if (isSelected && currentTransform == TRANSLATE)
     {
@@ -640,6 +698,7 @@ void joystick(unsigned int buttons, int x, int y, int z)
         {
             saveObjectsToFile("objetos.txt", pointCount, lineCount, meshCount, points, lines, meshes);
             showMessage = SAVE_MESH;
+            saveScreenshotBMP("projeto.bmp", widthScreen, heightScreen);
             glutTimerFunc(2000, hideMessage, 0);
             break;
         }
@@ -681,6 +740,13 @@ void joystick(unsigned int buttons, int x, int y, int z)
 
         break; // L2
     case JOYSTICK_R2:
+    if (currentMode == POLYGON && isDrawingPolygon)
+    {
+        meshes[meshCount++] = tempMesh;
+        tempMesh.numberPoints = 0;
+        isDrawingPolygon = 0;
+        printf("Poligono fechado e armazenado.\n");
+    }
         break; // R2
     case JOYSTICK_START:
         break; // Share
