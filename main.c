@@ -130,6 +130,7 @@ void deleteSelectedObject()
 }
 void drawIconJoystick(int x, int y, int radius)
 {
+    // Contorno cinza externo do joystick
     glColor3f(0.5, 0.5, 0.5);
     glBegin(GL_LINE_LOOP);
     for (int i = 0; i < 360; i++)
@@ -140,16 +141,45 @@ void drawIconJoystick(int x, int y, int radius)
         glVertex2f(x + dx, y + dy);
     }
     glEnd();
-    glColor3f(0.0, 0.8, 0.0);
-    glBegin(GL_POLYGON);
-    for (int i = 0; i < 360; i++)
+
+    if (currentMode == SELECTION)
     {
-        float angle = i * PI / 180.0;
-        float dx = (radius)*cos(angle);
-        float dy = (radius)*sin(angle);
-        glVertex2f(x + dx, y + dy);
+        glColor3f(0.4, 0.0, 1.0);
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < 360; i++)
+        {
+            float angle = i * PI / 180.0;
+            float dx = (radius + 2) * cos(angle);
+            float dy = (radius + 2) * sin(angle);
+            glVertex2f(x + dx, y + dy);
+        }
+        glEnd();
+
+        glColor3f(1.0, 0.0, 0.0);
+        glPointSize(5.0);
+        glBegin(GL_POINTS);
+        for (int i = 0; i < 360; i += 30)
+        {
+            float angle = i * PI / 180.0;
+            float dx = radius * cos(angle);
+            float dy = radius * sin(angle);
+            glVertex2f(x + dx, y + dy);
+        }
+        glEnd();
     }
-    glEnd();
+    else
+    {
+        glColor3f(0.0, 0.8, 0.0);
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 360; i++)
+        {
+            float angle = i * PI / 180.0;
+            float dx = radius * cos(angle);
+            float dy = radius * sin(angle);
+            glVertex2f(x + dx, y + dy);
+        }
+        glEnd();
+    }
 }
 
 void hideMessage(int value)
@@ -286,7 +316,7 @@ void keyboard(unsigned char key, int x, int y)
             joystickActive = 0;
             mirrorDirection = 1;
             if (IdSelectedPoint >= 0)
-                mirrorPoint(IdSelectedPoint, 1,points);
+                mirrorPoint(IdSelectedPoint, 1, points);
             else if (IdSelectedLine >= 0)
                 mirrorLine(IdSelectedLine, 1, lines);
             else if (IdSelectedPolygon >= 0)
@@ -366,7 +396,7 @@ void keyboard(unsigned char key, int x, int y)
     case 'S':
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
-        saveObjectsToFile("objetos.txt",pointCount,lineCount,meshCount,points,lines,meshes);
+        saveObjectsToFile("objetos.txt", pointCount, lineCount, meshCount, points, lines, meshes);
         showMessage = SAVE_MESH;
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
@@ -388,22 +418,16 @@ void keyboard(unsigned char key, int x, int y)
     glutPostRedisplay();
 }
 
-void joystick(int unsigned buttons, int x, int y, int z)
+void joystick(unsigned int buttons, int x, int y, int z)
 {
-    int *window = windowSize();
-    int moveX = 0, moveY = 0;
-    int normX = joystickX;
-    int normY = joystickY;
+    int previousButtonMask = buttonMask;
+    buttonMask = buttons;
 
-    // printf("%d, %d, %d\n", buttons, currentMode == LINE, isDrawing);
-    if (x > 0)
-        moveX = x / 80;
-    else if (x < 0)
-        moveX = x / 80;
-    if (y > 0)
-        moveY = -y / 80;
-    else if (y < 0)
-        moveY = -y / 80;
+    static int lastJoystickX = 0, lastJoystickY = 0;
+    static int lastMirrorDirection = -1;
+    int *window = windowSize();
+    int moveX = x / 80;
+    int moveY = -y / 80;
 
     joystickX += moveX;
     joystickY += moveY;
@@ -420,8 +444,91 @@ void joystick(int unsigned buttons, int x, int y, int z)
     if (joystickY > window[1])
         joystickY = window[1];
 
-    int previousButtonMask = buttonMask;
-    buttonMask = buttons;
+    float dx = joystickX - lastJoystickX;
+    float dy = joystickY - lastJoystickY;
+    lastJoystickX = joystickX;
+    lastJoystickY = joystickY;
+
+    // printf("dx: %2f dy: %2f | joystickX: %d joystickY: %d | lastX: %d lastY: %d , button: %d\n",
+    //        dx, dy, joystickX, joystickY, lastJoystickX, lastJoystickY, buttons);
+
+    if (isSelected && currentTransform == TRANSLATE)
+    {
+        if (IdSelectedPoint >= 0)
+            translatePoint(IdSelectedPoint, dx, dy, points);
+        else if (IdSelectedLine >= 0)
+            translateLine(IdSelectedLine, dx, dy, lines);
+        else if (IdSelectedPolygon >= 0)
+            translatePolygon(IdSelectedPolygon, dx, dy, meshes);
+    }
+    else if (isSelected && currentTransform == SCALE)
+    {
+        float scaleFactor = 1.0f;
+
+        if (dx > 0 || dy > 0)
+            scaleFactor = 1.04f;
+        else if (dx < 0 || dy < 0)
+            scaleFactor = 0.97f;
+
+        scaleFactorX *= scaleFactor;
+        scaleFactorY *= scaleFactor;
+
+        if (IdSelectedLine >= 0)
+            scaleLine(IdSelectedLine, scaleFactor, scaleFactor, lines);
+        else if (IdSelectedPolygon >= 0)
+            scalePolygon(IdSelectedPolygon, scaleFactor, scaleFactor, meshes);
+    }
+    else if (isSelected && currentTransform == ROTATE)
+    {
+        rotationAngle -= dx / 2;
+
+        if (IdSelectedPoint >= 0)
+        {
+            rotatePoint(IdSelectedPoint, -dx / 2, points);
+        }
+        else if (IdSelectedLine >= 0)
+        {
+            rotateLine(IdSelectedLine, -dx / 2, lines);
+        }
+        else if (IdSelectedPolygon >= 0)
+        {
+            rotatePolygon(IdSelectedPolygon, -dx / 2, meshes);
+        }
+    }
+    else if (isSelected && currentTransform == MIRROR && (dx != 0 || dy != 0))
+    {
+        int newMirrorDirection = (dx != 0) ? 0 : 1;
+        if (newMirrorDirection != mirrorDirection)
+        {
+            mirrorDirection = newMirrorDirection;
+            if (IdSelectedPoint >= 0)
+                mirrorPoint(IdSelectedPoint, mirrorDirection, points);
+            else if (IdSelectedLine >= 0)
+                mirrorLine(IdSelectedLine, mirrorDirection, lines);
+            else if (IdSelectedPolygon >= 0)
+                mirrorPolygon(IdSelectedPolygon, mirrorDirection, meshes);
+        }
+    }
+    else if (isSelected && currentTransform == SHEAR)
+    {
+        float shearX = 0.0f, shearY = 0.0f;
+
+        if (dx != 0)
+            shearX = (dx > 0) ? 0.05f : -0.05f;
+        if (dy != 0)
+            shearY = (dy > 0) ? 0.05f : -0.05f;
+
+        shearFactorX += shearX;
+        shearFactorY += shearY;
+
+        if (IdSelectedPoint >= 0)
+            shearPoint(IdSelectedPoint, shearX, shearY, points);
+        else if (IdSelectedLine >= 0)
+            shearLine(IdSelectedLine, shearX, shearY, lines);
+        else if (IdSelectedPolygon >= 0)
+            shearPolygon(IdSelectedPolygon, shearX, shearY, meshes);
+    }
+
     switch (buttons)
     {
     case JOYSTICK_DOWN:
@@ -430,7 +537,6 @@ void joystick(int unsigned buttons, int x, int y, int z)
             tempLine.end = (Point){joystickX, joystickY};
             lines[lineCount++] = tempLine;
             isDrawing = 0;
-            // printf("Linha criada: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
         }
         break;
 
@@ -456,21 +562,27 @@ void joystick(int unsigned buttons, int x, int y, int z)
         if (currentMode == VERTICE && buttonMask != previousButtonMask)
         {
             points[pointCount++] = (Point){joystickX, joystickY};
-            // printf("Ponto criado: (%d, %d) - Tipo: Vertice\n", joystickX, joystickY);
         }
         else if (currentMode == LINE && !isDrawing && buttonMask != previousButtonMask)
         {
             tempLine.init = (Point){joystickX, joystickY};
             isDrawing = 1;
-            // printf("inicio da linha: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
         }
         else if (currentMode == LINE && buttons == JOYSTICK_QUAD)
         {
             tempLine.end = (Point){joystickX, joystickY};
         }
-        else if (currentMode == POLYGON && isDrawingPolygon && tempMesh.numberPoints < MAX_POLYGON_POINTS)
+        else if (currentMode == POLYGON)
         {
-            // printf("polygono: (%d, %d) - Tipo: Linha\n", joystickX, joystickY);
+            if (!isDrawingPolygon)
+            {
+                isDrawingPolygon = 1;
+                tempMesh.numberPoints = 0;
+            }
+            if (tempMesh.numberPoints < MAX_POLYGON_POINTS && buttonMask != previousButtonMask)
+            {
+                tempMesh.vertices[tempMesh.numberPoints++] = (Point){joystickX, joystickY};
+            }
         }
         else if (currentMode == SELECTION && !isDrawing && buttonMask != previousButtonMask)
         {
@@ -483,11 +595,10 @@ void joystick(int unsigned buttons, int x, int y, int z)
             if (IdSelectedPoint >= 0)
             {
                 isSelected = 1;
-                // printf("Ponto selecionado: ID %d\n", IdSelectedPoint);
             }
             else
             {
-                IdSelectedLine = selectLine(joystickX, joystickY,lineCount, lines);
+                IdSelectedLine = selectLine(joystickX, joystickY, lineCount, lines);
 
                 if (IdSelectedLine >= 0)
                 {
@@ -527,7 +638,7 @@ void joystick(int unsigned buttons, int x, int y, int z)
     case JOYSTICK_TRIANGLE: // Triângulo
         if (buttonMask != previousButtonMask)
         {
-            saveObjectsToFile("objetos.txt",pointCount,lineCount,meshCount,points,lines,meshes);
+            saveObjectsToFile("objetos.txt", pointCount, lineCount, meshCount, points, lines, meshes);
             showMessage = SAVE_MESH;
             glutTimerFunc(2000, hideMessage, 0);
             break;
@@ -536,14 +647,25 @@ void joystick(int unsigned buttons, int x, int y, int z)
     case JOYSTICK_L1: // L1
         if (buttonMask != previousButtonMask)
         {
-            if (currentMode == SELECTION)
+            (currentMode == SELECTION) ? currentMode = VERTICE : currentMode++;
+            if (currentMode == POLYGON)
             {
-                currentMode = VERTICE;
+                showMessage = POLYLGON_LOG;
+                isDrawingPolygon = 1;
+                tempMesh.numberPoints = 0;
+                glutTimerFunc(2000, hideMessage, 0);
             }
-            else
+            else if (currentMode == VERTICE)
             {
-                printf("Modo desenho: %d\n", currentMode);
-                currentMode++;
+                showMessage = VERTCIE_LOG;
+                isDrawingPolygon = 0;
+                glutTimerFunc(2000, hideMessage, 0);
+            }
+            else if (currentMode == LINE)
+            {
+                showMessage = LINE_LOG;
+                isDrawingPolygon = 0;
+                glutTimerFunc(2000, hideMessage, 0);
             }
         }
         break;
@@ -551,18 +673,12 @@ void joystick(int unsigned buttons, int x, int y, int z)
     case JOYSTICK_R1: // R1
         if (buttonMask != previousButtonMask)
         {
-            if (currentTransform == SHEAR)
-            {
-                currentTransform = NONE_TRANSFORMER;
-            }
-            else
-            {
-                printf("Modo tranformacao: %d\n", currentTransform);
-                currentTransform++;
-            }
+            if (currentTransform == SHEAR) currentTransform = NONE_TRANSFORMER;
+            else currentTransform++;
         }
         break;
     case JOYSTICK_L2:
+
         break; // L2
     case JOYSTICK_R2:
         break; // R2
@@ -580,11 +696,17 @@ void joystick(int unsigned buttons, int x, int y, int z)
                 IdSelectedPolygon = -1;
                 isSelected = 0;
                 currentTransform = NONE_TRANSFORMER;
-                printf("Sele��o removida.\n");
+                printf("Selecao removida.\n");
             }
         }
         break; // L3
     case JOYSTICK_R3:
+        if (currentMode == POLYGON && isDrawingPolygon)
+        {
+            meshes[meshCount++] = tempMesh;
+            tempMesh.numberPoints = 0;
+            isDrawingPolygon = 0;
+        }
         break;                 // R3
     case JOYSTICK_ICON_BUTTON: // PS
         exit(0);
@@ -597,8 +719,6 @@ void joystick(int unsigned buttons, int x, int y, int z)
     default:
         break;
     }
-
-    // printf("%d %d\n", j)
     glutPostRedisplay();
 }
 
@@ -672,7 +792,7 @@ void mouse(int button, int state, int x, int y)
                     }
                     else
                     {
-                        IdSelectedPolygon = selectPolygon(normX, normY, meshCount,meshes);
+                        IdSelectedPolygon = selectPolygon(normX, normY, meshCount, meshes);
 
                         if (IdSelectedPolygon >= 0)
                         {
@@ -727,7 +847,7 @@ void mouse(int button, int state, int x, int y)
             IdSelectedPolygon = -1;
             isSelected = 0;
             currentTransform = NONE_TRANSFORMER;
-            printf("Sele��o removida.\n");
+            printf("Selecao removida.\n");
         }
     }
     else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN && isSelected)
@@ -899,7 +1019,7 @@ void specialKeys(int key, int x, int y)
                 }
                 else if (IdSelectedPolygon >= 0)
                 {
-                    translatePolygon(IdSelectedPolygon, 0, step,meshes);
+                    translatePolygon(IdSelectedPolygon, 0, step, meshes);
                 }
             }
             else if (currentTransform == SHEAR && shiftPressed)
@@ -1068,14 +1188,14 @@ void display()
     {
         drawIconJoystick(joystickX, joystickY, 8);
     }
-    drawPreviewPoint(currentMode, isDrawing,tempPoint);
-    drawPreviewLine(currentMode,isDrawing,tempPoint,colorLoading_r,colorLoading_g,colorLoading_b,tempLine);
-    drawPreviewPolygon(isDrawingPolygon,colorLoading_r,colorLoading_g,colorLoading_b,tempMesh);
-    drawPoint(points,pointCount,isSelected,IdSelectedPoint);
-    drawLines(lines, lineCount,IdSelectedLine,isSelected);
-    drawPolygon(meshes,meshCount,IdSelectedPolygon, isSelected);
-    drawSelectedObject(isSelected,IdSelectedPoint,IdSelectedLine,IdSelectedPolygon,points,lines,meshes);
-    drawTransformInfo(isSelected,IdSelectedPoint,IdSelectedLine,IdSelectedPolygon,currentTransform, rotationAngle, scaleFactorX, scaleFactorY,shearFactorX,shearFactorY);
+    drawPreviewPoint(currentMode, isDrawing, tempPoint);
+    drawPreviewLine(currentMode, isDrawing, tempPoint, colorLoading_r, colorLoading_g, colorLoading_b, tempLine);
+    drawPreviewPolygon(isDrawingPolygon, colorLoading_r, colorLoading_g, colorLoading_b, tempMesh);
+    drawPoint(points, pointCount, isSelected, IdSelectedPoint);
+    drawLines(lines, lineCount, IdSelectedLine, isSelected);
+    drawPolygon(meshes, meshCount, IdSelectedPolygon, isSelected);
+    drawSelectedObject(isSelected, IdSelectedPoint, IdSelectedLine, IdSelectedPolygon, points, lines, meshes);
+    drawTransformInfo(isSelected, IdSelectedPoint, IdSelectedLine, IdSelectedPolygon, currentTransform, rotationAngle, scaleFactorX, scaleFactorY, shearFactorX, shearFactorY);
     drawMessage(showMessage);
     glutSwapBuffers();
 }
