@@ -87,6 +87,7 @@ void motion(int x, int y);
 void timer(int value);
 void passiveMotion(int x, int y);
 void keyboard(unsigned char key, int x, int y);
+void saveScreenshotBMP(const char *filename, int width, int height);
 
 
 #endif

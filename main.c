@@ -12,11 +12,11 @@
 
 #pragma pack(push, 1)
 typedef struct {
-    unsigned char  bfType[2];      // Tipo (BM)
-    unsigned int   bfSize;         // Tamanho do arquivo
-    unsigned short bfReserved1;    // Reservado (0)
-    unsigned short bfReserved2;    // Reservado (0)
-    unsigned int   bfOffBits;      // Offset dos dados da imagem
+    unsigned char  bfType[2];    
+    unsigned int   bfSize;         
+    unsigned short bfReserved1;    
+    unsigned short bfReserved2;    
+    unsigned int   bfOffBits;      
 } BMPHeader;
 
 typedef struct {
@@ -421,6 +421,7 @@ void keyboard(unsigned char key, int x, int y)
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
         saveObjectsToFile("objetos.txt", pointCount, lineCount, meshCount, points, lines, meshes);
+        saveScreenshotBMP("projeto.bmp", window[0], window[1]);
         showMessage = SAVE_MESH;
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
