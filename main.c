@@ -1,14 +1,28 @@
 //=================================================== IMPORTAÇÕES ======================================================
 /**
  * Aqui estão presentes todas as importações necessárias para o
- * funcionamento do proejto PAINT AIMULATOR, possuindo alguns
- * arquivos como
+ * funcionamento do proejto PAINT AIMULATOR, possuindo alguns arquivos como:
  *
- * glut.h    -  para usar o OpenGL
- * stdio.h   -  entrada de dados como prinft
- * stdlib.h  -  gerenciamento da memória
- * math.h    - funções matemáricas
- * data.h    - structs e cabeçalhos das funções padrão usadas no projeto
+ * glut.h            -  para usar o OpenGL
+ * stdio.h           -  entrada de dados como prinft
+ * stdlib.h          -  gerenciamento da memória
+ * math.h            -  funções matemáricas
+ * data.h            -  structs e cabeçalhos das funções padrão usadas no projeto
+ * arqs.c            -  funções carregamento e salvamento do desenho
+ * draw.c            -  funções de desenhos de linha, ponto e poligonos, alem dos previews dos desenhos
+ * tranformers.c     -  funções para tranformações de Escala, Tranlação, ROtação, Cislhamento e Reflexão 
+ *                      para os elementos de desenho (pontos, linhas e poligonos).
+ * calculate.c       -  Funções de calculos feitas para o projeto
+ * time.h            -  biblioteca para gerir o tempo de execução
+ * 
+ * 
+ * AUTORES DO PROJETO
+ * 
+ * @authors
+ * Raphael Rates
+ * José Denis
+ * Gabriela Queiroga
+ * 
  *
  */
 
@@ -23,66 +37,84 @@
 #include <calculate.c>
 #include <time.h>
 
+/**
+ * @struct BMPHeader
+ * @brief Estrutura para armazenar o cabeçalho de arquivos BMP.
+ */
 #pragma pack(push, 1)
 typedef struct
 {
-    unsigned char bfType[2];
-    unsigned int bfSize;
-    unsigned short bfReserved1;
-    unsigned short bfReserved2;
-    unsigned int bfOffBits;
+    unsigned char bfType[2];   /**< @var Tipo do arquivo ("BM" para Bitmap). */
+    unsigned int bfSize;       /**< @var Tamanho total do arquivo em bytes. */
+    unsigned short bfReserved1; /**< @var Reservado (deve ser 0). */
+    unsigned short bfReserved2; /**< @var Reservado (deve ser 0). */
+    unsigned int bfOffBits;    /**< @var Offset onde os dados de imagem começam. */
 } BMPHeader;
 
+/**
+ * @struct BMPInfoHeader
+ * @brief Estrutura para armazenar informações sobre a imagem BMP.
+ */
 typedef struct
 {
-    unsigned int biSize;
-    int biWidth;
-    int biHeight;
-    unsigned short biPlanes;
-    unsigned short biBitCount;
-    unsigned int biCompression;
-    unsigned int biSizeImage;
-    int biXPelsPerMeter;
-    int biYPelsPerMeter;
-    unsigned int biClrUsed;
-    unsigned int biClrImportant;
+    unsigned int biSize;         /**< @var Tamanho da estrutura. */
+    int biWidth;                 /**< @var Largura da imagem em pixels. */
+    int biHeight;                /**< @var Altura da imagem em pixels. */
+    unsigned short biPlanes;     /**< @var Número de planos de cor (deve ser 1). */
+    unsigned short biBitCount;   /**< @var Número de bits por pixel. */
+    unsigned int biCompression;  /**< @var Tipo de compressão. */
+    unsigned int biSizeImage;    /**< @var Tamanho da imagem em bytes. */
+    int biXPelsPerMeter;         /**< @var Resolução horizontal (pixels por metro). */
+    int biYPelsPerMeter;         /**< @var Resolução vertical (pixels por metro). */
+    unsigned int biClrUsed;      /**< @var Número de cores na paleta. */
+    unsigned int biClrImportant; /**< @var Número de cores importantes. */
 } BMPInfoHeader;
 #pragma pack(pop)
 
-//==================================================== VARIAVEIS ============================================================
+//==================================================== VARIÁVEIS ============================================================
 
+/** @var Ponteiros para estruturas dinâmicas de pontos, linhas e malhas. */
 Point *points = NULL;
 Mesh *meshes = NULL;
 Line *lines = NULL;
 
+/** @var Estruturas temporárias para manipulação de malhas, pontos e linhas. */
 Mesh tempMesh;
 Point tempPoint;
 Line tempLine;
 
+/** @var Contadores para os elementos desenhados. */
 int pointCount = 0, lineCount = 0, meshCount = 0;
+
+/** @var Flags de controle de desenho. */
 int isDrawing = 0, isDrawingPolygon = 0, isSelected;
 MESSAGE showMessage = NONE_MESSAGE;
 
+/** @var Controle de joystick e mouse. */
 int joystickActive = 0;
 int joystickButton = 0;
 int buttonMask = 0;
 int joystickX = 400, joystickY = 400;
 int lastMouseX = -1, lastMouseY = -1;
-int MousseActvive = 1;
+int MousseActvive = 1; /**< @note "MouseActive" está escrito errado. O correto seria "MouseActive". */
 
+/** @var IDs de seleção de elementos gráficos. */
 int IdSelectedLine = -1;
 int IdSelectedPoint = -1;
 int IdSelectedPolygon = -1;
 
+/** @var Flags para transformações geométricas. */
 int isTranslating = 0;
 int isRotating = 0;
 int isScaling = 0;
 int isMirroring = 0;
 int isShearing = 0;
 
+/** @var Ponto de referência para transformações. */
 Point referencePoint;
 Point lastMousePos;
 
+/** @var Parâmetros para transformações geométricas. */
 float rotationAngle = 0.0f;
 float scaleFactorX = 1.0f;
 float scaleFactorY = 1.0f;
@@ -90,11 +122,15 @@ int mirrorDirection = 0;
 float shearFactorX = 0.0f;
 float shearFactorY = 0.0f;
 
+/** @var Modos de transformação e desenho. */
 TransformMode currentTransform = NONE_TRANSFORMER;
 Mode currentMode = NONE_MESH;
 int joystickMode = 0;
 float colorLoading_r = 0.1f, colorLoading_g = 0.5f, colorLoading_b = 0.3f;
 
+/** @struct CatAnimationState
+ *  @brief Estrutura para controlar o estado de animação do gato.
+ */
 CatAnimationState catState = CAT_IDLE;
 float catX = 0.0f;
 float catY = 0.0f;
@@ -1002,7 +1038,7 @@ void joystick(unsigned int buttons, int x, int y, int z)
     switch (buttons)
     {
     case JOYSTICK_DOWN:
-        setCatState(CAT_IDLE);
+        
         if ((currentMode == LINE) && isDrawing && joystickActive)
         {
             tempLine.end = (Point){joystickX, joystickY};
@@ -1013,27 +1049,25 @@ void joystick(unsigned int buttons, int x, int y, int z)
         break;
 
     case JOYSTICK_X: // X
-        setCatState(CAT_IDLE);
         if (buttonMask != previousButtonMask)
         {
             showMessage = LOAD_MESH;
             loadObjectsFromFile("objetos.txt", &pointCount, &lineCount, &meshCount, &points, &lines, &meshes, &tempMesh);
             glutTimerFunc(2000, hideMessage, 0);
-            break;
+            
         }
+        break;
 
     case JOYSTICK_CIRCLE: // O
-        setCatState(CAT_IDLE);
         if (buttonMask != previousButtonMask)
         {
             showMessage = DELETED;
             deleteSelectedObject();
             glutTimerFunc(2000, hideMessage, 0);
-            break;
         }
+        break;
 
     case JOYSTICK_QUAD: // Quadrado
-        setCatState(CAT_IDLE);
         if (currentMode == VERTICE && buttonMask != previousButtonMask)
         {
             points[pointCount++] = (Point){joystickX, joystickY};
@@ -1111,18 +1145,16 @@ void joystick(unsigned int buttons, int x, int y, int z)
 
         break;
     case JOYSTICK_TRIANGLE: // Triângulo
-        setCatState(CAT_IDLE);
         if (buttonMask != previousButtonMask)
         {
             saveObjectsToFile("objetos.txt", pointCount, lineCount, meshCount, points, lines, meshes);
             showMessage = SAVE_MESH;
             saveScreenshotBMP("projeto.bmp", widthScreen, heightScreen);
             glutTimerFunc(2000, hideMessage, 0);
-            break;
+            
         }
-
+        break;
     case JOYSTICK_L1: // L1
-        setCatState(CAT_IDLE);
         if (buttonMask != previousButtonMask)
         {
             (currentMode == SELECTION) ? currentMode = VERTICE : currentMode++;
@@ -1156,7 +1188,7 @@ void joystick(unsigned int buttons, int x, int y, int z)
                 currentTransform = NONE_TRANSFORMER;
             else
                 currentTransform++;
-            setCatState(currentTransform);
+                setCatState(currentTransform);
         }
         break;
     case JOYSTICK_L2:
@@ -1178,9 +1210,9 @@ void joystick(unsigned int buttons, int x, int y, int z)
     case JOYSTICK_L3:
         if (buttonMask != previousButtonMask)
         {
-            setCatState(CAT_IDLE);
             if (isSelected)
             {
+                setCatState(CAT_IDLE);
                 IdSelectedPoint = -1;
                 IdSelectedLine = -1;
                 IdSelectedPolygon = -1;
