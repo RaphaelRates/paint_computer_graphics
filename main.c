@@ -1,4 +1,16 @@
 //=================================================== IMPORTAÇÕES ======================================================
+/**
+ * Aqui estão presentes todas as importações necessárias para o
+ * funcionamento do proejto PAINT AIMULATOR, possuindo alguns
+ * arquivos como
+ *
+ * glut.h    -  para usar o OpenGL
+ * stdio.h   -  entrada de dados como prinft
+ * stdlib.h  -  gerenciamento da memória
+ * math.h    - funções matemáricas
+ * data.h    - structs e cabeçalhos das funções padrão usadas no projeto
+ *
+ */
 
 #include <GL/glut.h>
 #include <stdio.h>
@@ -9,28 +21,31 @@
 #include <draw.c>
 #include <transformers.c>
 #include <calculate.c>
+#include <time.h>
 
 #pragma pack(push, 1)
-typedef struct {
-    unsigned char  bfType[2];    
-    unsigned int   bfSize;         
-    unsigned short bfReserved1;    
-    unsigned short bfReserved2;    
-    unsigned int   bfOffBits;      
+typedef struct
+{
+    unsigned char bfType[2];
+    unsigned int bfSize;
+    unsigned short bfReserved1;
+    unsigned short bfReserved2;
+    unsigned int bfOffBits;
 } BMPHeader;
 
-typedef struct {
-    unsigned int   biSize;         
-    int            biWidth;        
-    int            biHeight;       
-    unsigned short biPlanes;       
-    unsigned short biBitCount;     
-    unsigned int   biCompression;  
-    unsigned int   biSizeImage;    
-    int            biXPelsPerMeter;                        
-    int            biYPelsPerMeter;                      
-    unsigned int   biClrUsed;                            
-    unsigned int   biClrImportant; 
+typedef struct
+{
+    unsigned int biSize;
+    int biWidth;
+    int biHeight;
+    unsigned short biPlanes;
+    unsigned short biBitCount;
+    unsigned int biCompression;
+    unsigned int biSizeImage;
+    int biXPelsPerMeter;
+    int biYPelsPerMeter;
+    unsigned int biClrUsed;
+    unsigned int biClrImportant;
 } BMPInfoHeader;
 #pragma pack(pop)
 
@@ -79,6 +94,19 @@ TransformMode currentTransform = NONE_TRANSFORMER;
 Mode currentMode = NONE_MESH;
 int joystickMode = 0;
 float colorLoading_r = 0.1f, colorLoading_g = 0.5f, colorLoading_b = 0.3f;
+
+CatAnimationState catState = CAT_IDLE;
+float catX = 0.0f;
+float catY = 0.0f;
+float catSize = 30.0f;
+float catAngle = 0.0f;
+float catScaleFactor = 1.0f;
+float catAnimationTime = 0.0f;
+clock_t lastFrameTime;
+float catEarWiggle = 0.0f;
+float catTailAngle = 30.0f;
+int catBlinkCounter = 0;
+int catIsBlinking = 0;
 
 //============================================================ FUNÇÕES BASE =============================================================
 
@@ -152,6 +180,375 @@ void deleteSelectedObject()
     isSelected = 0;
     currentTransform = NONE_TRANSFORMER;
 }
+
+void drawCat()
+{
+    glPushMatrix();
+    int *window = windowSize();
+    if (catX == 0 && catY == 0)
+    {
+        catX = window[0] - 70;
+        catY = window[1] - 70;
+    }
+    glTranslatef(catX, catY, 1.0f);
+    glScalef(1.0f, 1.0f, 1.0f);
+
+    if (catState == CAT_ROTATE)
+    {
+        glRotatef(catAngle, 0.0f, 0.0f, 1.0f);
+    }
+
+    if (catState == CAT_SCALE)
+    {
+        glScalef(catScaleFactor, catScaleFactor, 1.0f);
+    }
+
+    if (catState == CAT_MIRROR)
+    {
+        if (mirrorDirection == 0)
+        {
+            glScalef(-1.0f, 1.0f, 1.0f);
+        }
+        else
+        {
+            glScalef(1.0f, -1.0f, 1.0f);
+        }
+    }
+
+    if (catState == CAT_SHEAR)
+    {
+        float m[16] = {
+            1.0f, shearFactorY * 0.2f, 0.0f, 0.0f,
+            shearFactorX * 0.2f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f};
+        glMultMatrixf(m);
+    }
+
+    // Desenhar o corpo do gatinho (c�rculo)
+    glColor3f(0.8f, 0.8f, 0.8f); // Cinza claro
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 20; i++)
+    {
+        float angle = 2.0f * PI * i / 20;
+        glVertex2f(catSize * cosf(angle), catSize * sinf(angle));
+    }
+    glEnd();
+
+    // Desenhar o rosto
+    glColor3f(1.0f, 0.8f, 0.8f); // Rosa claro para o focinho
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 20; i++)
+    {
+        float angle = 2.0f * PI * i / 20;
+        glVertex2f(catSize * 0.4f * cosf(angle), catSize * 0.4f * sinf(angle) - catSize * 0.1f);
+    }
+    glEnd();
+
+    // Orelhas (tri�ngulos)
+    glColor3f(0.8f, 0.8f, 0.8f); // Cinza claro
+    glBegin(GL_TRIANGLES);
+    // Orelha esquerda
+    glVertex2f(-catSize * 0.5f, catSize * 0.5f);
+    glVertex2f(-catSize * 0.7f - catEarWiggle, catSize * 0.9f + catEarWiggle);
+    glVertex2f(-catSize * 0.3f, catSize * 0.9f);
+
+    // Orelha direita
+    glVertex2f(catSize * 0.5f, catSize * 0.5f);
+    glVertex2f(catSize * 0.3f, catSize * 0.9f);
+    glVertex2f(catSize * 0.7f + catEarWiggle, catSize * 0.9f + catEarWiggle);
+    glEnd();
+
+    // Olhos (c�rculos)
+    if (catIsBlinking)
+    {
+        // Olhos fechados (linhas)
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        // Olho esquerdo
+        glVertex2f(-catSize * 0.3f, catSize * 0.2f);
+        glVertex2f(-catSize * 0.1f, catSize * 0.2f);
+        // Olho direito
+        glVertex2f(catSize * 0.1f, catSize * 0.2f);
+        glVertex2f(catSize * 0.3f, catSize * 0.2f);
+        glEnd();
+    }
+    else
+    {
+        // Olhos abertos
+        glColor3f(0.2f, 0.6f, 0.8f); // Azul para os olhos
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = 2.0f * PI * i / 20;
+            glVertex2f(-catSize * 0.2f + catSize * 0.1f * cosf(angle),
+                       catSize * 0.2f + catSize * 0.1f * sinf(angle));
+        }
+        glEnd();
+
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = 2.0f * PI * i / 20;
+            glVertex2f(catSize * 0.2f + catSize * 0.1f * cosf(angle),
+                       catSize * 0.2f + catSize * 0.1f * sinf(angle));
+        }
+        glEnd();
+
+        // Pupilas
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = 2.0f * PI * i / 20;
+            glVertex2f(-catSize * 0.2f + catSize * 0.05f * cosf(angle),
+                       catSize * 0.2f + catSize * 0.05f * sinf(angle));
+        }
+        glEnd();
+
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = 2.0f * PI * i / 20;
+            glVertex2f(catSize * 0.2f + catSize * 0.05f * cosf(angle),
+                       catSize * 0.2f + catSize * 0.05f * sinf(angle));
+        }
+        glEnd();
+    }
+
+    // Nariz
+    glColor3f(0.9f, 0.5f, 0.5f); // Rosa para o nariz
+    glBegin(GL_TRIANGLES);
+    glVertex2f(-catSize * 0.05f, catSize * 0.0f);
+    glVertex2f(catSize * 0.05f, catSize * 0.0f);
+    glVertex2f(0.0f, catSize * -0.05f);
+    glEnd();
+
+    // Bigodes (linhas)
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    // Bigodes esquerdos
+    glVertex2f(-catSize * 0.2f, 0.0f);
+    glVertex2f(-catSize * 0.6f, catSize * 0.1f);
+    glVertex2f(-catSize * 0.2f, -catSize * 0.05f);
+    glVertex2f(-catSize * 0.6f, -catSize * 0.05f);
+    glVertex2f(-catSize * 0.2f, -catSize * 0.1f);
+    glVertex2f(-catSize * 0.6f, -catSize * 0.2f);
+
+    // Bigodes direitos
+    glVertex2f(catSize * 0.2f, 0.0f);
+    glVertex2f(catSize * 0.6f, catSize * 0.1f);
+    glVertex2f(catSize * 0.2f, -catSize * 0.05f);
+    glVertex2f(catSize * 0.6f, -catSize * 0.05f);
+    glVertex2f(catSize * 0.2f, -catSize * 0.1f);
+    glVertex2f(catSize * 0.6f, -catSize * 0.2f);
+    glEnd();
+
+    // Rabo
+    glLineWidth(2.0f);
+    glColor3f(0.7f, 0.7f, 0.7f);
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i <= 10; i++)
+    {
+        float t = (float)i / 10.0f;
+        float x = -catSize + t * catSize * 0.4f;
+        float y = -catSize * 0.7f + sinf(t * PI * 2 + catTailAngle * PI / 180.0f) * catSize * 0.3f;
+        glVertex2f(x, y);
+    }
+    glEnd();
+
+    // Boca
+    glLineWidth(2.0f);
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glBegin(GL_LINE_STRIP);
+    if (catState == CAT_IDLE)
+    {
+        // Sorriso suave
+        for (int i = 0; i <= 10; i++)
+        {
+            float t = (float)i / 10.0f;
+            float x = (t - 0.5f) * catSize * 0.4f;
+            float y = -catSize * 0.15f - sinf(t * PI) * catSize * 0.03f;
+            glVertex2f(x, y);
+        }
+    }
+    else if (catState == CAT_TRANSLATE)
+    {
+        // Boca aberta de surpresa
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = PI + PI * i / 20;
+            if (angle > PI && angle < 2 * PI)
+            {
+                glVertex2f(catSize * 0.1f * cosf(angle),
+                           -catSize * 0.15f + catSize * 0.1f * sinf(angle));
+            }
+        }
+    }
+    else if (catState == CAT_ROTATE)
+    {
+        // Boca em "o" de surpresa
+        for (int i = 0; i <= 20; i++)
+        {
+            float angle = PI + PI * i / 20;
+            float x = catSize * 0.1f * cosf(angle);
+            float y = -catSize * 0.15f + catSize * 0.05f * sinf(angle);
+            glVertex2f(x, y);
+        }
+    }
+    else if (catState == CAT_SCALE)
+    {
+        // Sorriso largo
+        for (int i = 0; i <= 10; i++)
+        {
+            float t = (float)i / 10.0f;
+            float x = (t - 0.5f) * catSize * 0.5f;
+            float y = -catSize * 0.15f - sinf(t * PI) * catSize * 0.1f;
+            glVertex2f(x, y);
+        }
+    }
+    else if (catState == CAT_MIRROR)
+    {
+        // Boca de confus�o
+        for (int i = 0; i <= 10; i++)
+        {
+            float t = (float)i / 10.0f;
+            float x = (t - 0.5f) * catSize * 0.4f;
+            float y = -catSize * 0.15f + cosf((t - 0.5f) * PI * 2) * catSize * 0.03f;
+            glVertex2f(x, y);
+        }
+    }
+    else if (catState == CAT_SHEAR)
+    {
+        // Boca de esfor�o
+        for (int i = 0; i <= 10; i++)
+        {
+            float t = (float)i / 10.0f;
+            float x = (t - 0.5f) * catSize * 0.4f;
+            float y = -catSize * 0.15f + sinf(t * PI * 3) * catSize * 0.03f;
+            glVertex2f(x, y);
+        }
+    }
+    glEnd();
+
+    glPopMatrix();
+}
+
+void updateCatAnimation()
+{
+    // Calcular delta de tempo
+    clock_t currentTime = clock();
+    float deltaTime = (float)(currentTime - lastFrameTime) / CLOCKS_PER_SEC;
+    lastFrameTime = currentTime;
+
+    catAnimationTime += deltaTime;
+    int *window = windowSize();
+
+    // Atualizar vari�veis de anima��o baseadas no estado
+    switch (catState)
+    {
+    case CAT_IDLE:
+        // Anima��o de respira��o suave
+        catScaleFactor = 1.0f + sinf(catAnimationTime * 2.0f) * 0.02f;
+        catEarWiggle = sinf(catAnimationTime * 3.0f) * 2.0f;
+        catTailAngle = 30.0f + sinf(catAnimationTime) * 10.0f;
+        break;
+
+    case CAT_TRANSLATE:
+        // Movimento saltitante
+        catY = (float)(window[1] - 70) + sinf(catAnimationTime * 8.0f) * 10.0f;
+        catEarWiggle = sinf(catAnimationTime * 8.0f) * 5.0f;
+        catTailAngle = 60.0f + sinf(catAnimationTime * 5.0f) * 20.0f;
+        break;
+
+    case CAT_ROTATE:
+        // Rota��o lenta
+        catAngle = sinf(catAnimationTime * 2.0f) * 15.0f;
+        catTailAngle = 30.0f + sinf(catAnimationTime * 3.0f) * 40.0f;
+        break;
+
+    case CAT_SCALE:
+        // Pulsar
+        catScaleFactor = 1.0f + sinf(catAnimationTime * 5.0f) * 0.2f;
+        catTailAngle = 50.0f + cosf(catAnimationTime * 8.0f) * 30.0f;
+        break;
+
+    case CAT_MIRROR:
+        // Efeito de confus�o
+        catEarWiggle = sinf(catAnimationTime * 10.0f) * 3.0f;
+        catTailAngle = 90.0f + cosf(catAnimationTime * 12.0f) * 30.0f;
+        break;
+
+    case CAT_SHEAR:
+        // Efeito de distor��o
+        catEarWiggle = sinf(catAnimationTime * 6.0f) * 8.0f;
+        catTailAngle = 120.0f + sinf(catAnimationTime * 10.0f) * 40.0f;
+        break;
+    }
+
+    // Piscar aleatoriamente
+    catBlinkCounter++;
+    if (catBlinkCounter > 100)
+    {                                  // Aproximadamente a cada 3 segundos
+        int shouldBlink = rand() % 10; // 10% de chance de piscar
+        if (shouldBlink == 0)
+        {
+            catIsBlinking = 1;
+            catBlinkCounter = 0;
+        }
+    }
+    else if (catBlinkCounter > 5 && catIsBlinking)
+    { // Dura��o do piscar
+        catIsBlinking = 0;
+    }
+
+    glutPostRedisplay();
+}
+
+void setCatState(CatAnimationState state)
+{
+    catState = state;
+    catAnimationTime = 0.0f;
+    int *window = windowSize(); // Reinicia o tempo da anima��o
+
+    // Efeitos de inicializa��o para diferentes estados
+    switch (state)
+    {
+    case CAT_IDLE:
+        catScaleFactor = 1.0f;
+        catAngle = 0.0f;
+        break;
+
+    case CAT_TRANSLATE:
+        catY = window[1] - 70;
+        break;
+
+    case CAT_ROTATE:
+        catAngle = 15.0f;
+        break;
+
+    case CAT_SCALE:
+        catScaleFactor = 1.2f;
+        break;
+
+    case CAT_MIRROR:
+        catEarWiggle = 5.0f;
+        break;
+
+    case CAT_SHEAR:
+        catTailAngle = 90.0f;
+        break;
+    }
+}
+
+void idleFunc()
+{
+    updateCatAnimation();
+}
+
 void drawIconJoystick(int x, int y, int radius)
 {
 
@@ -224,6 +621,7 @@ void keyboard(unsigned char key, int x, int y)
         showMessage = POLYLGON_LOG;
         isDrawingPolygon = 1;
         tempMesh.numberPoints = 0;
+        setCatState(CAT_IDLE);
         glutTimerFunc(2000, hideMessage, 0);
         printf("Modo: Desenhar Poligono\n");
         break;
@@ -233,6 +631,7 @@ void keyboard(unsigned char key, int x, int y)
         isDrawing = 1;
         currentMode = LINE;
         showMessage = LINE_LOG;
+        setCatState(CAT_IDLE);
         glutTimerFunc(2000, hideMessage, 0);
         printf("Modo: Desenhar Linha\n");
         break;
@@ -240,6 +639,7 @@ void keyboard(unsigned char key, int x, int y)
         glutSetCursor(GLUT_CURSOR_CROSSHAIR);
         currentMode = VERTICE;
         showMessage = VERTCIE_LOG;
+        setCatState(CAT_IDLE);
         glutTimerFunc(2000, hideMessage, 0);
         printf("Modo: Desenhar Vertice\n");
         break;
@@ -247,7 +647,7 @@ void keyboard(unsigned char key, int x, int y)
         glutSetCursor(GLUT_CURSOR_CYCLE);
         joystickActive = 0;
         currentMode = SELECTION;
-
+        setCatState(CAT_IDLE);
         printf("Modo: Selecao\n");
         break;
     case 't':
@@ -255,6 +655,7 @@ void keyboard(unsigned char key, int x, int y)
         {
             glutSetCursor(GLUT_CURSOR_CYCLE);
             joystickActive = 0;
+            setCatState(CAT_TRANSLATE);
             currentTransform = TRANSLATE;
             printf("Transformacao: Translacao\n");
         }
@@ -264,6 +665,7 @@ void keyboard(unsigned char key, int x, int y)
         {
             glutSetCursor(GLUT_CURSOR_UP_DOWN);
             joystickActive = 0;
+            setCatState(CAT_ROTATE);
             currentTransform = ROTATE;
             printf("Transformacao: Rotacao\n");
         }
@@ -273,6 +675,7 @@ void keyboard(unsigned char key, int x, int y)
         {
             glutSetCursor(GLUT_CURSOR_SPRAY);
             joystickActive = 0;
+            setCatState(CAT_SCALE);
             currentTransform = SCALE;
             printf("Transformacao: Escala\n");
         }
@@ -282,6 +685,7 @@ void keyboard(unsigned char key, int x, int y)
         {
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
             joystickActive = 0;
+            setCatState(CAT_MIRROR);
             currentTransform = MIRROR;
             printf("Transformacao: Reflexao\n");
         }
@@ -291,6 +695,7 @@ void keyboard(unsigned char key, int x, int y)
         {
             glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
             joystickActive = 0;
+            setCatState(CAT_SHEAR);
             currentTransform = SHEAR;
             printf("Transformacao: Cisalhamento\n");
         }
@@ -315,6 +720,7 @@ void keyboard(unsigned char key, int x, int y)
         printf("Outras operacoes:\n");
         printf("  Botao do meio do mouse: Alternar entre transformacoes\n");
         printf("  Botao direito: Cancelar selecao ou fechar poligono\n");
+        setCatState(CAT_IDLE);
 
         break;
     case 'x':
@@ -413,6 +819,7 @@ void keyboard(unsigned char key, int x, int y)
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
         showMessage = DELETED;
+        setCatState(CAT_IDLE);
         deleteSelectedObject();
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
@@ -420,6 +827,7 @@ void keyboard(unsigned char key, int x, int y)
     case 'S':
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
+        setCatState(CAT_IDLE);
         saveObjectsToFile("objetos.txt", pointCount, lineCount, meshCount, points, lines, meshes);
         saveScreenshotBMP("projeto.bmp", window[0], window[1]);
         showMessage = SAVE_MESH;
@@ -432,6 +840,7 @@ void keyboard(unsigned char key, int x, int y)
         glutSetCursor(GLUT_CURSOR_WAIT);
         joystickActive = 0;
         showMessage = LOAD_MESH;
+        setCatState(CAT_IDLE);
         loadObjectsFromFile("objetos.txt", &pointCount, &lineCount, &meshCount, &points, &lines, &meshes, &tempMesh);
         glutTimerFunc(2000, hideMessage, 0);
         glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
@@ -443,23 +852,25 @@ void keyboard(unsigned char key, int x, int y)
     glutPostRedisplay();
 }
 
-void saveScreenshotBMP(const char *filename, int width, int height) {
+void saveScreenshotBMP(const char *filename, int width, int height)
+{
     FILE *file = fopen(filename, "wb");
-    if (!file) {
+    if (!file)
+    {
         printf("Erro ao abrir o arquivo para salvar.\n");
         return;
     }
 
     BMPHeader bmpHeader = {{'B', 'M'}, 54 + 3 * width * height, 0, 0, 54};
     BMPInfoHeader bmpInfoHeader = {
-        40, width, -height, 1, 24, 0, 3 * width * height, 2835, 2835, 0, 0
-    };
+        40, width, -height, 1, 24, 0, 3 * width * height, 2835, 2835, 0, 0};
 
     fwrite(&bmpHeader, sizeof(BMPHeader), 1, file);
     fwrite(&bmpInfoHeader, sizeof(BMPInfoHeader), 1, file);
 
     GLubyte *pixels = (GLubyte *)malloc(3 * width * height);
-    if (!pixels) {
+    if (!pixels)
+    {
         printf("Erro ao alocar memoria.\n");
         fclose(file);
         return;
@@ -591,15 +1002,18 @@ void joystick(unsigned int buttons, int x, int y, int z)
     switch (buttons)
     {
     case JOYSTICK_DOWN:
+        setCatState(CAT_IDLE);
         if ((currentMode == LINE) && isDrawing && joystickActive)
         {
             tempLine.end = (Point){joystickX, joystickY};
             lines[lineCount++] = tempLine;
             isDrawing = 0;
         }
+
         break;
 
     case JOYSTICK_X: // X
+        setCatState(CAT_IDLE);
         if (buttonMask != previousButtonMask)
         {
             showMessage = LOAD_MESH;
@@ -609,6 +1023,7 @@ void joystick(unsigned int buttons, int x, int y, int z)
         }
 
     case JOYSTICK_CIRCLE: // O
+        setCatState(CAT_IDLE);
         if (buttonMask != previousButtonMask)
         {
             showMessage = DELETED;
@@ -618,6 +1033,7 @@ void joystick(unsigned int buttons, int x, int y, int z)
         }
 
     case JOYSTICK_QUAD: // Quadrado
+        setCatState(CAT_IDLE);
         if (currentMode == VERTICE && buttonMask != previousButtonMask)
         {
             points[pointCount++] = (Point){joystickX, joystickY};
@@ -695,6 +1111,7 @@ void joystick(unsigned int buttons, int x, int y, int z)
 
         break;
     case JOYSTICK_TRIANGLE: // Triângulo
+        setCatState(CAT_IDLE);
         if (buttonMask != previousButtonMask)
         {
             saveObjectsToFile("objetos.txt", pointCount, lineCount, meshCount, points, lines, meshes);
@@ -705,6 +1122,7 @@ void joystick(unsigned int buttons, int x, int y, int z)
         }
 
     case JOYSTICK_L1: // L1
+        setCatState(CAT_IDLE);
         if (buttonMask != previousButtonMask)
         {
             (currentMode == SELECTION) ? currentMode = VERTICE : currentMode++;
@@ -731,23 +1149,27 @@ void joystick(unsigned int buttons, int x, int y, int z)
         break;
 
     case JOYSTICK_R1: // R1
+
         if (buttonMask != previousButtonMask)
         {
-            if (currentTransform == SHEAR) currentTransform = NONE_TRANSFORMER;
-            else currentTransform++;
+            if (currentTransform == SHEAR)
+                currentTransform = NONE_TRANSFORMER;
+            else
+                currentTransform++;
+            setCatState(currentTransform);
         }
         break;
     case JOYSTICK_L2:
 
         break; // L2
     case JOYSTICK_R2:
-    if (currentMode == POLYGON && isDrawingPolygon)
-    {
-        meshes[meshCount++] = tempMesh;
-        tempMesh.numberPoints = 0;
-        isDrawingPolygon = 0;
-        printf("Poligono fechado e armazenado.\n");
-    }
+        if (currentMode == POLYGON && isDrawingPolygon)
+        {
+            meshes[meshCount++] = tempMesh;
+            tempMesh.numberPoints = 0;
+            isDrawingPolygon = 0;
+            printf("Poligono fechado e armazenado.\n");
+        }
         break; // R2
     case JOYSTICK_START:
         break; // Share
@@ -756,6 +1178,7 @@ void joystick(unsigned int buttons, int x, int y, int z)
     case JOYSTICK_L3:
         if (buttonMask != previousButtonMask)
         {
+            setCatState(CAT_IDLE);
             if (isSelected)
             {
                 IdSelectedPoint = -1;
@@ -1259,11 +1682,15 @@ void display()
     drawPreviewLine(currentMode, isDrawing, tempPoint, colorLoading_r, colorLoading_g, colorLoading_b, tempLine);
     drawPreviewPolygon(isDrawingPolygon, colorLoading_r, colorLoading_g, colorLoading_b, tempMesh);
     drawPoint(points, pointCount, isSelected, IdSelectedPoint);
+
     drawLines(lines, lineCount, IdSelectedLine, isSelected);
     drawPolygon(meshes, meshCount, IdSelectedPolygon, isSelected);
     drawSelectedObject(isSelected, IdSelectedPoint, IdSelectedLine, IdSelectedPolygon, points, lines, meshes);
     drawTransformInfo(isSelected, IdSelectedPoint, IdSelectedLine, IdSelectedPolygon, currentTransform, rotationAngle, scaleFactorX, scaleFactorY, shearFactorX, shearFactorY);
     drawMessage(showMessage);
+
+    drawCat();
+
     glutSwapBuffers();
 }
 
@@ -1282,6 +1709,7 @@ int main(int argc, char **argv)
     glutJoystickFunc(joystick, 10);
     glutReshapeFunc(reshape);
     glutDisplayFunc(display);
+    glutIdleFunc(idleFunc);
     glutPassiveMotionFunc(passiveMotion);
     timer(0);
     glutMouseFunc(mouse);

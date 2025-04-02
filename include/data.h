@@ -71,6 +71,12 @@ typedef enum
     SHEAR
 } TransformMode;
 
+typedef enum {
+    CAT_IDLE, CAT_TRANSLATE, CAT_ROTATE, CAT_SCALE, CAT_MIRROR, CAT_SHEAR
+} CatAnimationState;
+
+
+
 //==================================================== VARIAVEIS ============================================================
 
 void initLines();
@@ -88,6 +94,12 @@ void timer(int value);
 void passiveMotion(int x, int y);
 void keyboard(unsigned char key, int x, int y);
 void saveScreenshotBMP(const char *filename, int width, int height);
+void idleFunc();
+
+void drawCat();
+void updateCatAnimation();
+void setCatState(CatAnimationState state);
+void idleFunc();
 
 
 #endif
