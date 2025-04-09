@@ -6,3 +6,4 @@ src
 lib
 *.cpp
 *.txt
+*.bmp
