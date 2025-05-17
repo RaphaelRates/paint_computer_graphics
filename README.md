@@ -946,6 +946,1464 @@ void shearPolygon(int id, float sx, float sy, Mesh *meshes)
 
 Essas funções permitem ao usuário selecionar e transformar objetos gráficos de forma interativa, proporcionando uma experiência completa de edição no ambiente OpenGL.
 
+## 📦 Estruturas e Variáveis Globais
+
+Abaixo estão as principais estruturas, variáveis globais e importações utilizadas no projeto, essenciais para o funcionamento do editor gráfico.
+
+### 📥 Importações
+
+O projeto utiliza as seguintes bibliotecas e arquivos:
+
+- **OpenGL/GLUT** (`glut.h`): Renderização gráfica.
+- **stdio.h**: Entrada e saída padrão (ex: `printf`).
+- **stdlib.h**: Gerenciamento de memória.
+- **math.h**: Funções matemáticas.
+- **time.h**: Controle de tempo e animações.
+- **Arquivos do projeto**:
+    - `data.h`: Definições de structs e funções principais.
+    - `arqs.c`: Funções de salvamento/carregamento.
+    - `draw.c`: Funções de desenho e pré-visualização.
+    - `transformers.c`: Transformações geométricas (escala, translação, rotação, cisalhamento, reflexão).
+    - `calculate.c`: Funções auxiliares de cálculo.
+
+### 🗂️ Estruturas de Dados
+
+```c
+// Estruturas para manipulação de arquivos BMP (exportação futura)
+#pragma pack(push, 1)
+typedef struct {
+        unsigned char bfType[2];
+        unsigned int bfSize;
+        unsigned short bfReserved1;
+        unsigned short bfReserved2;
+        unsigned int bfOffBits;
+} BMPHeader;
+
+typedef struct {
+        unsigned int biSize;
+        int biWidth, biHeight;
+        unsigned short biPlanes, biBitCount;
+        unsigned int biCompression, biSizeImage;
+        int biXPelsPerMeter, biYPelsPerMeter;
+        unsigned int biClrUsed, biClrImportant;
+} BMPInfoHeader;
+#pragma pack(pop)
+```
+
+### 🧩 Variáveis Globais
+
+- **Elementos gráficos**:
+    - `Point *points`, `Line *lines`, `Mesh *meshes`: Vetores dinâmicos para pontos, linhas e polígonos.
+    - `Mesh tempMesh`, `Point tempPoint`, `Line tempLine`: Estruturas temporárias para desenho.
+
+- **Contadores**:
+    - `int pointCount, lineCount, meshCount`: Quantidade de cada elemento desenhado.
+
+- **Seleção e Transformação**:
+    - `int IdSelectedPoint, IdSelectedLine, IdSelectedPolygon`: IDs dos elementos selecionados.
+    - `int isSelected`: Flag de seleção.
+    - `TransformMode currentTransform`: Modo de transformação atual.
+    - `float rotationAngle, scaleFactorX, scaleFactorY, shearFactorX, shearFactorY`: Parâmetros de transformação.
+    - `int mirrorDirection`: Direção da reflexão.
+
+- **Controle de desenho e entrada**:
+    - `int isDrawing, isDrawingPolygon`: Flags de desenho.
+    - `Mode currentMode`: Modo de desenho atual.
+    - `int joystickActive, joystickButton, buttonMask, joystickX, joystickY`: Controle de joystick.
+    - `int lastMouseX, lastMouseY, MousseActvive`: Controle de mouse.
+
+- **Mensagens e feedback**:
+    - `MESSAGE showMessage`: Mensagem exibida na tela.
+
+- **Animação extra (gato)**:
+    - `CatAnimationState catState`: Estado da animação do gato.
+    - `float catX, catY, catSize, catAngle, catScaleFactor, catAnimationTime, catEarWiggle, catTailAngle`: Parâmetros de animação.
+    - `int catBlinkCounter, catIsBlinking`: Controle de piscada.
+    - `clock_t lastFrameTime`: Controle de tempo para animação.
+
+---
+
+Essas definições garantem a base para manipulação eficiente dos objetos gráficos, controle de entrada do usuário e animações criativas no editor.
+
+## 🧰 Funções Utilitárias e Gerenciamento de Objetos
+
+Abaixo estão exemplos de funções utilitárias para gerenciamento de janela, inicialização de estruturas e exclusão de objetos selecionados no editor gráfico.
+
+```c
+// Retorna o tamanho da janela (80% da tela)
+int *windowSize()
+{
+    int *window = (int *)malloc(2 * sizeof(int));
+    if (window == NULL)
+    {
+        printf("Erro ao alocar memoria!\n");
+        exit(1);
+    }
+    window[0] = (int)(0.8 * glutGet(GLUT_SCREEN_WIDTH));
+    window[1] = (int)(0.8 * glutGet(GLUT_SCREEN_HEIGHT));
+    return window;
+}
+
+// Inicializa o vetor de linhas
+void initLines()
+{
+    if (lines == NULL)
+        lines = (Line *)malloc(MAX_SHAPES * sizeof(Line));
+}
+
+// Inicializa o vetor de pontos
+void initPoints()
+{
+    if (points == NULL)
+        points = (Point *)malloc(MAX_SHAPES * sizeof(Point));
+}
+
+// Inicializa o vetor de polígonos
+void initPolygons()
+{
+    if (meshes == NULL)
+        meshes = (Mesh *)malloc(MAX_SHAPES * sizeof(Mesh));
+}
+
+// Remove o objeto selecionado (ponto, linha ou polígono)
+void deleteSelectedObject()
+{
+    if (!isSelected)
+        return;
+
+    if (IdSelectedPoint >= 0)
+    {
+        for (int i = IdSelectedPoint; i < pointCount - 1; i++)
+        {
+            points[i] = points[i + 1];
+        }
+        pointCount--;
+        printf("Ponto ID %d foi deletado\n", IdSelectedPoint);
+    }
+    else if (IdSelectedLine >= 0)
+    {
+        for (int i = IdSelectedLine; i < lineCount - 1; i++)
+        {
+            lines[i] = lines[i + 1];
+        }
+        lineCount--;
+        printf("Linha ID %d foi deletado\n", IdSelectedLine);
+    }
+    else if (IdSelectedPolygon >= 0)
+    {
+        for (int i = IdSelectedPolygon; i < meshCount - 1; i++)
+        {
+            meshes[i] = meshes[i + 1];
+        }
+        meshCount--;
+        printf("Poligono ID %d foi deletado\n", IdSelectedPolygon);
+    }
+
+    IdSelectedPoint = -1;
+    IdSelectedLine = -1;
+    IdSelectedPolygon = -1;
+    isSelected = 0;
+    currentTransform = NONE_TRANSFORMER;
+}
+```
+
+Essas funções garantem a correta alocação de memória para os objetos gráficos e permitem a exclusão eficiente de elementos selecionados pelo usuário.
+## 🐱 Animação Extra: Gatinho Animado
+
+O projeto inclui uma animação criativa de um gatinho, que responde a diferentes transformações (translação, rotação, escala, reflexão, cisalhamento) e possui efeitos visuais como piscadas, movimento de cauda e orelhas.
+
+### ✨ Funções Principais
+
+#### Desenho do Gatinho
+
+```c
+void drawCat()
+{
+    glPushMatrix();
+    int *window = windowSize();
+    if (catX == 0 && catY == 0)
+    {
+        catX = window[0] - 70;
+        catY = window[1] - 70;
+    }
+    glTranslatef(catX, catY, 1.0f);
+    glScalef(1.0f, 1.0f, 1.0f);
+
+    // Transformações conforme o estado do gato
+    if (catState == CAT_ROTATE)
+        glRotatef(catAngle, 0.0f, 0.0f, 1.0f);
+
+    if (catState == CAT_SCALE)
+        glScalef(catScaleFactor, catScaleFactor, 1.0f);
+
+    if (catState == CAT_MIRROR)
+        glScalef(mirrorDirection == 0 ? -1.0f : 1.0f, mirrorDirection == 1 ? -1.0f : 1.0f, 1.0f);
+
+    if (catState == CAT_SHEAR)
+    {
+        float m[16] = {
+            1.0f, shearFactorY * 0.2f, 0.0f, 0.0f,
+            shearFactorX * 0.2f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f};
+        glMultMatrixf(m);
+    }
+
+    // Corpo do gato (círculo)
+    glColor3f(0.8f, 0.8f, 0.8f);
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 20; i++)
+    {
+        float angle = 2.0f * PI * i / 20;
+        glVertex2f(catSize * cosf(angle), catSize * sinf(angle));
+    }
+    glEnd();
+
+    // Focinho (círculo menor)
+    glColor3f(1.0f, 0.8f, 0.8f);
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 20; i++)
+    {
+        float angle = 2.0f * PI * i / 20;
+        glVertex2f(catSize * 0.4f * cosf(angle), catSize * 0.4f * sinf(angle) - catSize * 0.1f);
+    }
+    glEnd();
+
+    // Orelhas (triângulos)
+    glColor3f(0.8f, 0.8f, 0.8f);
+    glBegin(GL_TRIANGLES);
+    // Esquerda
+    glVertex2f(-catSize * 0.5f, catSize * 0.5f);
+    glVertex2f(-catSize * 0.7f - catEarWiggle, catSize * 0.9f + catEarWiggle);
+    glVertex2f(-catSize * 0.3f, catSize * 0.9f);
+    // Direita
+    glVertex2f(catSize * 0.5f, catSize * 0.5f);
+    glVertex2f(catSize * 0.3f, catSize * 0.9f);
+    glVertex2f(catSize * 0.7f + catEarWiggle, catSize * 0.9f + catEarWiggle);
+    glEnd();
+
+    // Olhos (abertos ou piscando)
+    if (catIsBlinking)
+    {
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glLineWidth(2.0f);
+        glBegin(GL_LINES);
+        glVertex2f(-catSize * 0.3f, catSize * 0.2f);
+        glVertex2f(-catSize * 0.1f, catSize * 0.2f);
+        glVertex2f(catSize * 0.1f, catSize * 0.2f);
+        glVertex2f(catSize * 0.3f, catSize * 0.2f);
+        glEnd();
+    }
+    else
+    {
+        // Olhos abertos (círculos azuis e pupilas pretas)
+        glColor3f(0.2f, 0.6f, 0.8f);
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = 2.0f * PI * i / 20;
+            glVertex2f(-catSize * 0.2f + catSize * 0.1f * cosf(angle),
+                       catSize * 0.2f + catSize * 0.1f * sinf(angle));
+        }
+        glEnd();
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = 2.0f * PI * i / 20;
+            glVertex2f(catSize * 0.2f + catSize * 0.1f * cosf(angle),
+                       catSize * 0.2f + catSize * 0.1f * sinf(angle));
+        }
+        glEnd();
+
+        glColor3f(0.0f, 0.0f, 0.0f);
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = 2.0f * PI * i / 20;
+            glVertex2f(-catSize * 0.2f + catSize * 0.05f * cosf(angle),
+                       catSize * 0.2f + catSize * 0.05f * sinf(angle));
+        }
+        glEnd();
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = 2.0f * PI * i / 20;
+            glVertex2f(catSize * 0.2f + catSize * 0.05f * cosf(angle),
+                       catSize * 0.2f + catSize * 0.05f * sinf(angle));
+        }
+        glEnd();
+    }
+
+    // Nariz
+    glColor3f(0.9f, 0.5f, 0.5f);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(-catSize * 0.05f, catSize * 0.0f);
+    glVertex2f(catSize * 0.05f, catSize * 0.0f);
+    glVertex2f(0.0f, catSize * -0.05f);
+    glEnd();
+
+    // Bigodes
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glLineWidth(1.0f);
+    glBegin(GL_LINES);
+    // Esquerda
+    glVertex2f(-catSize * 0.2f, 0.0f); glVertex2f(-catSize * 0.6f, catSize * 0.1f);
+    glVertex2f(-catSize * 0.2f, -catSize * 0.05f); glVertex2f(-catSize * 0.6f, -catSize * 0.05f);
+    glVertex2f(-catSize * 0.2f, -catSize * 0.1f); glVertex2f(-catSize * 0.6f, -catSize * 0.2f);
+    // Direita
+    glVertex2f(catSize * 0.2f, 0.0f); glVertex2f(catSize * 0.6f, catSize * 0.1f);
+    glVertex2f(catSize * 0.2f, -catSize * 0.05f); glVertex2f(catSize * 0.6f, -catSize * 0.05f);
+    glVertex2f(catSize * 0.2f, -catSize * 0.1f); glVertex2f(catSize * 0.6f, -catSize * 0.2f);
+    glEnd();
+
+    // Rabo (linha animada)
+    glLineWidth(2.0f);
+    glColor3f(0.7f, 0.7f, 0.7f);
+    glBegin(GL_LINE_STRIP);
+    for (int i = 0; i <= 10; i++)
+    {
+        float t = (float)i / 10.0f;
+        float x = -catSize + t * catSize * 0.4f;
+        float y = -catSize * 0.7f + sinf(t * PI * 2 + catTailAngle * PI / 180.0f) * catSize * 0.3f;
+        glVertex2f(x, y);
+    }
+    glEnd();
+
+    // Boca (diferente para cada estado)
+    glLineWidth(2.0f);
+    glColor3f(0.0f, 0.0f, 0.0f);
+    glBegin(GL_LINE_STRIP);
+    if (catState == CAT_IDLE)
+    {
+        for (int i = 0; i <= 10; i++)
+        {
+            float t = (float)i / 10.0f;
+            float x = (t - 0.5f) * catSize * 0.4f;
+            float y = -catSize * 0.15f - sinf(t * PI) * catSize * 0.03f;
+            glVertex2f(x, y);
+        }
+    }
+    else if (catState == CAT_TRANSLATE)
+    {
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 20; i++)
+        {
+            float angle = PI + PI * i / 20;
+            if (angle > PI && angle < 2 * PI)
+                glVertex2f(catSize * 0.1f * cosf(angle),
+                           -catSize * 0.15f + catSize * 0.1f * sinf(angle));
+        }
+    }
+    else if (catState == CAT_ROTATE)
+    {
+        for (int i = 0; i <= 20; i++)
+        {
+            float angle = PI + PI * i / 20;
+            float x = catSize * 0.1f * cosf(angle);
+            float y = -catSize * 0.15f + catSize * 0.05f * sinf(angle);
+            glVertex2f(x, y);
+        }
+    }
+    else if (catState == CAT_SCALE)
+    {
+        for (int i = 0; i <= 10; i++)
+        {
+            float t = (float)i / 10.0f;
+            float x = (t - 0.5f) * catSize * 0.5f;
+            float y = -catSize * 0.15f - sinf(t * PI) * catSize * 0.1f;
+            glVertex2f(x, y);
+        }
+    }
+    else if (catState == CAT_MIRROR)
+    {
+        for (int i = 0; i <= 10; i++)
+        {
+            float t = (float)i / 10.0f;
+            float x = (t - 0.5f) * catSize * 0.4f;
+            float y = -catSize * 0.15f + cosf((t - 0.5f) * PI * 2) * catSize * 0.03f;
+            glVertex2f(x, y);
+        }
+    }
+    else if (catState == CAT_SHEAR)
+    {
+        for (int i = 0; i <= 10; i++)
+        {
+            float t = (float)i / 10.0f;
+            float x = (t - 0.5f) * catSize * 0.4f;
+            float y = -catSize * 0.15f + sinf(t * PI * 3) * catSize * 0.03f;
+            glVertex2f(x, y);
+        }
+    }
+    glEnd();
+
+    glPopMatrix();
+}
+```
+
+#### Atualização da Animação
+
+```c
+void updateCatAnimation()
+{
+    clock_t currentTime = clock();
+    float deltaTime = (float)(currentTime - lastFrameTime) / CLOCKS_PER_SEC;
+    lastFrameTime = currentTime;
+
+    catAnimationTime += deltaTime;
+    int *window = windowSize();
+
+    switch (catState)
+    {
+    case CAT_IDLE:
+        catScaleFactor = 1.0f + sinf(catAnimationTime * 2.0f) * 0.02f;
+        catEarWiggle = sinf(catAnimationTime * 3.0f) * 2.0f;
+        catTailAngle = 30.0f + sinf(catAnimationTime) * 10.0f;
+        break;
+    case CAT_TRANSLATE:
+        catY = (float)(window[1] - 70) + sinf(catAnimationTime * 8.0f) * 10.0f;
+        catEarWiggle = sinf(catAnimationTime * 8.0f) * 5.0f;
+        catTailAngle = 60.0f + sinf(catAnimationTime * 5.0f) * 20.0f;
+        break;
+    case CAT_ROTATE:
+        catAngle = sinf(catAnimationTime * 2.0f) * 15.0f;
+        catTailAngle = 30.0f + sinf(catAnimationTime * 3.0f) * 40.0f;
+        break;
+    case CAT_SCALE:
+        catScaleFactor = 1.0f + sinf(catAnimationTime * 5.0f) * 0.2f;
+        catTailAngle = 50.0f + cosf(catAnimationTime * 8.0f) * 30.0f;
+        break;
+    case CAT_MIRROR:
+        catEarWiggle = sinf(catAnimationTime * 10.0f) * 3.0f;
+        catTailAngle = 90.0f + cosf(catAnimationTime * 12.0f) * 30.0f;
+        break;
+    case CAT_SHEAR:
+        catEarWiggle = sinf(catAnimationTime * 6.0f) * 8.0f;
+        catTailAngle = 120.0f + sinf(catAnimationTime * 10.0f) * 40.0f;
+        break;
+    }
+
+    // Piscar aleatório
+    catBlinkCounter++;
+    if (catBlinkCounter > 100)
+    {
+        int shouldBlink = rand() % 10;
+        if (shouldBlink == 0)
+        {
+            catIsBlinking = 1;
+            catBlinkCounter = 0;
+        }
+    }
+    else if (catBlinkCounter > 5 && catIsBlinking)
+    {
+        catIsBlinking = 0;
+    }
+
+    glutPostRedisplay();
+}
+```
+
+#### Controle de Estado da Animação
+
+```c
+void setCatState(CatAnimationState state)
+{
+    catState = state;
+    catAnimationTime = 0.0f;
+    int *window = windowSize();
+
+    switch (state)
+    {
+    case CAT_IDLE:
+        catScaleFactor = 1.0f;
+        catAngle = 0.0f;
+        break;
+    case CAT_TRANSLATE:
+        catY = window[1] - 70;
+        break;
+    case CAT_ROTATE:
+        catAngle = 15.0f;
+        break;
+    case CAT_SCALE:
+        catScaleFactor = 1.2f;
+        break;
+    case CAT_MIRROR:
+        catEarWiggle = 5.0f;
+        break;
+    case CAT_SHEAR:
+        catTailAngle = 90.0f;
+        break;
+    }
+}
+```
+
+#### Função Idle para Atualização Contínua
+
+```c
+void idleFunc()
+{
+    updateCatAnimation();
+}
+```
+
+## 🎹 Atalhos de Teclado
+
+Abaixo estão os principais atalhos de teclado para utilizar o editor gráfico:
+
+| Tecla         | Função                                                                 |
+|---------------|------------------------------------------------------------------------|
+| **v**         | Modo vértice (desenhar pontos)                                         |
+| **l**         | Modo linha (desenhar segmentos de reta)                                |
+| **p**         | Modo polígono (desenhar polígonos)                                     |
+| **s**         | Modo seleção                                                           |
+| **t**         | Ativar translação (após selecionar um objeto)                          |
+| **r**         | Ativar rotação (após selecionar um objeto)                             |
+| **e**         | Ativar escala (após selecionar um objeto)                              |
+| **m**         | Ativar reflexão (após selecionar um objeto)                            |
+| **c**         | Ativar cisalhamento (após selecionar um objeto)                        |
+| **x**         | Reflexão horizontal (quando em modo reflexão)                          |
+| **y**         | Reflexão vertical (quando em modo reflexão)                            |
+| **a / d**     | Rotacionar objeto selecionado (anti-horário/horário)                   |
+| **+ / -**     | Aumentar/diminuir escala do objeto selecionado                         |
+| **D**         | Deletar objeto selecionado                                             |
+| **S**         | Salvar objetos e screenshot                                            |
+| **L**         | Carregar objetos do arquivo                                            |
+| **h**         | Exibir ajuda no terminal                                               |
+| **ESC**       | Sair do programa                                                       |
+
+Outras operações:
+- **Botão do meio do mouse**: Alternar entre transformações
+- **Botão direito do mouse**: Cancelar seleção ou fechar polígono
+
+---
+
+---
+
+## 🎮 Função de Desenho do Ícone do Joystick
+
+Abaixo está a função responsável por desenhar um ícone de joystick na tela, indicando visualmente o modo de seleção ou outro estado do editor:
+
+```c
+void drawIconJoystick(int x, int y, int radius)
+{
+    glColor3f(0.5, 0.5, 0.5);
+    glBegin(GL_LINE_LOOP);
+    for (int i = 0; i < 360; i++)
+    {
+        float angle = i * PI / 180.0;
+        float dx = (radius + 2) * cos(angle);
+        float dy = (radius + 2) * sin(angle);
+        glVertex2f(x + dx, y + dy);
+    }
+    glEnd();
+
+    if (currentMode == SELECTION)
+    {
+        glColor3f(0.4, 0.0, 1.0);
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < 360; i++)
+        {
+            float angle = i * PI / 180.0;
+            float dx = (radius + 2) * cos(angle);
+            float dy = (radius + 2) * sin(angle);
+            glVertex2f(x + dx, y + dy);
+        }
+        glEnd();
+
+        glColor3f(1.0, 0.0, 0.0);
+        glPointSize(5.0);
+        glBegin(GL_POINTS);
+        for (int i = 0; i < 360; i += 30)
+        {
+            float angle = i * PI / 180.0;
+            float dx = radius * cos(angle);
+            float dy = radius * sin(angle);
+            glVertex2f(x + dx, y + dy);
+        }
+        glEnd();
+    }
+    else
+    {
+        glColor3f(0.0, 0.8, 0.0);
+        glBegin(GL_POLYGON);
+        for (int i = 0; i < 360; i++)
+        {
+            float angle = i * PI / 180.0;
+            float dx = radius * cos(angle);
+            float dy = radius * sin(angle);
+            glVertex2f(x + dx, y + dy);
+        }
+        glEnd();
+    }
+}
+```
+
+**Descrição:**
+- Desenha um círculo externo cinza como base do ícone.
+- Se o modo atual for `SELECTION`, destaca o círculo com uma borda roxa e pontos vermelhos ao redor, indicando seleção ativa.
+- Caso contrário, preenche o círculo de verde, indicando outro estado.
+
+Utilize essa função para exibir o status do joystick ou modo de seleção no seu editor gráfico.
+
+
+## 🎮 Função de Manipulação do Joystick
+
+Abaixo está a função responsável por tratar os eventos do joystick, permitindo desenhar, selecionar e transformar objetos no editor gráfico:
+
+```c
+void joystick(unsigned int buttons, int x, int y, int z)
+{
+    int previousButtonMask = buttonMask;
+    buttonMask = buttons;
+
+    static int lastJoystickX = 0, lastJoystickY = 0;
+    static int lastMirrorDirection = -1;
+    int *window = windowSize();
+    int moveX = x / 80;
+    int moveY = -y / 80;
+
+    int widthScreen = window[0], heightScreen = window[1];
+
+    joystickX += moveX;
+    joystickY += moveY;
+
+    joystickActive = (x != 0 || y != 0);
+    MousseActvive = !joystickActive;
+
+    if (joystickX < 0)
+        joystickX = 0;
+    if (joystickX > window[0])
+        joystickX = window[0];
+    if (joystickY < 0)
+        joystickY = 0;
+    if (joystickY > window[1])
+        joystickY = window[1];
+
+    float dx = joystickX - lastJoystickX;
+    float dy = joystickY - lastJoystickY;
+    lastJoystickX = joystickX;
+    lastJoystickY = joystickY;
+
+    printf("dx: %2f dy: %2f | joystickX: %d joystickY: %d | lastX: %d lastY: %d , button: %d\n",
+           dx, dy, joystickX, joystickY, lastJoystickX, lastJoystickY, buttons);
+
+    if (isSelected && currentTransform == TRANSLATE)
+    {
+        if (IdSelectedPoint >= 0)
+            translatePoint(IdSelectedPoint, dx, dy, points);
+        else if (IdSelectedLine >= 0)
+            translateLine(IdSelectedLine, dx, dy, lines);
+        else if (IdSelectedPolygon >= 0)
+            translatePolygon(IdSelectedPolygon, dx, dy, meshes);
+    }
+    else if (isSelected && currentTransform == SCALE)
+    {
+        float scaleFactor = 1.0f;
+
+        if (dx > 0 || dy > 0)
+            scaleFactor = 1.04f;
+        else if (dx < 0 || dy < 0)
+            scaleFactor = 0.97f;
+
+        scaleFactorX *= scaleFactor;
+        scaleFactorY *= scaleFactor;
+
+        if (IdSelectedLine >= 0)
+            scaleLine(IdSelectedLine, scaleFactor, scaleFactor, lines);
+        else if (IdSelectedPolygon >= 0)
+            scalePolygon(IdSelectedPolygon, scaleFactor, scaleFactor, meshes);
+    }
+    else if (isSelected && currentTransform == ROTATE)
+    {
+        rotationAngle -= dx / 2;
+
+        if (IdSelectedPoint >= 0)
+        {
+            rotatePoint(IdSelectedPoint, -dx / 2, points);
+        }
+        else if (IdSelectedLine >= 0)
+        {
+            rotateLine(IdSelectedLine, -dx / 2, lines);
+        }
+        else if (IdSelectedPolygon >= 0)
+        {
+            rotatePolygon(IdSelectedPolygon, -dx / 2, meshes);
+        }
+    }
+    else if (isSelected && currentTransform == MIRROR && (dx != 0 || dy != 0))
+    {
+        int newMirrorDirection = (dx != 0) ? 0 : 1;
+        if (newMirrorDirection != mirrorDirection)
+        {
+            mirrorDirection = newMirrorDirection;
+            if (IdSelectedPoint >= 0)
+                mirrorPoint(IdSelectedPoint, mirrorDirection, points);
+            else if (IdSelectedLine >= 0)
+                mirrorLine(IdSelectedLine, mirrorDirection, lines);
+            else if (IdSelectedPolygon >= 0)
+                mirrorPolygon(IdSelectedPolygon, mirrorDirection, meshes);
+        }
+    }
+    else if (isSelected && currentTransform == SHEAR)
+    {
+        float shearX = 0.0f, shearY = 0.0f;
+
+        if (dx != 0)
+            shearX = (dx > 0) ? 0.05f : -0.05f;
+        if (dy != 0)
+            shearY = (dy > 0) ? 0.05f : -0.05f;
+
+        shearFactorX += shearX;
+        shearFactorY += shearY;
+
+        if (IdSelectedPoint >= 0)
+            shearPoint(IdSelectedPoint, shearX, shearY, points);
+        else if (IdSelectedLine >= 0)
+            shearLine(IdSelectedLine, shearX, shearY, lines);
+        else if (IdSelectedPolygon >= 0)
+            shearPolygon(IdSelectedPolygon, shearX, shearY, meshes);
+    }
+
+    switch (buttons)
+    {
+    case JOYSTICK_DOWN:
+        if ((currentMode == LINE) && isDrawing && joystickActive)
+        {
+            tempLine.end = (Point){joystickX, joystickY};
+            lines[lineCount++] = tempLine;
+            isDrawing = 0;
+        }
+        break;
+
+    case JOYSTICK_X: // X
+        if (buttonMask != previousButtonMask)
+        {
+            showMessage = LOAD_MESH;
+            loadObjectsFromFile("objetos.txt", &pointCount, &lineCount, &meshCount, &points, &lines, &meshes, &tempMesh);
+            glutTimerFunc(2000, hideMessage, 0);
+        }
+        break;
+
+    case JOYSTICK_CIRCLE: // O
+        if (buttonMask != previousButtonMask)
+        {
+            showMessage = DELETED;
+            deleteSelectedObject();
+            glutTimerFunc(2000, hideMessage, 0);
+        }
+        break;
+
+    case JOYSTICK_QUAD: // Quadrado
+        if (currentMode == VERTICE && buttonMask != previousButtonMask)
+        {
+            points[pointCount++] = (Point){joystickX, joystickY};
+        }
+        else if (currentMode == LINE && !isDrawing && buttonMask != previousButtonMask)
+        {
+            tempLine.init = (Point){joystickX, joystickY};
+            isDrawing = 1;
+        }
+        else if (currentMode == LINE && buttons == JOYSTICK_QUAD)
+        {
+            tempLine.end = (Point){joystickX, joystickY};
+        }
+        else if (currentMode == POLYGON)
+        {
+            if (!isDrawingPolygon)
+            {
+                isDrawingPolygon = 1;
+                tempMesh.numberPoints = 0;
+            }
+            if (tempMesh.numberPoints < MAX_POLYGON_POINTS && buttonMask != previousButtonMask)
+            {
+                tempMesh.vertices[tempMesh.numberPoints++] = (Point){joystickX, joystickY};
+            }
+        }
+        else if (currentMode == SELECTION && !isDrawing && buttonMask != previousButtonMask)
+        {
+            IdSelectedPoint = -1;
+            IdSelectedLine = -1;
+            IdSelectedPolygon = -1;
+            isSelected = 0;
+            IdSelectedPoint = selectPoint(joystickX, joystickY, pointCount, points);
+
+            if (IdSelectedPoint >= 0)
+            {
+                isSelected = 1;
+            }
+            else
+            {
+                IdSelectedLine = selectLine(joystickX, joystickY, lineCount, lines);
+
+                if (IdSelectedLine >= 0)
+                {
+                    isSelected = 1;
+                    printf("Linha selecionada: ID %d\n", IdSelectedLine);
+                }
+                else
+                {
+                    IdSelectedPolygon = selectPolygon(joystickX, joystickY, meshCount, meshes);
+
+                    if (IdSelectedPolygon >= 0)
+                    {
+                        isSelected = 1;
+                        printf("Poligono selecionado: ID %d\n", IdSelectedPolygon);
+                    }
+                }
+            }
+
+            if (isSelected)
+            {
+                if (IdSelectedPoint >= 0)
+                {
+                    referencePoint = points[IdSelectedPoint];
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    referencePoint = calculateLineCenter(lines[IdSelectedLine]);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    referencePoint = calculatePolygonCenter(meshes[IdSelectedPolygon]);
+                }
+            }
+        }
+        break;
+
+    case JOYSTICK_TRIANGLE: // Triângulo
+        if (buttonMask != previousButtonMask)
+        {
+            saveObjectsToFile("objetos.txt", pointCount, lineCount, meshCount, points, lines, meshes);
+            showMessage = SAVE_MESH;
+            saveScreenshotBMP("projeto.bmp", widthScreen, heightScreen);
+            glutTimerFunc(2000, hideMessage, 0);
+        }
+        break;
+
+    case JOYSTICK_L1: // L1
+        if (buttonMask != previousButtonMask)
+        {
+            (currentMode == SELECTION) ? currentMode = VERTICE : currentMode++;
+            if (currentMode == POLYGON)
+            {
+                showMessage = POLYLGON_LOG;
+                isDrawingPolygon = 1;
+                tempMesh.numberPoints = 0;
+                glutTimerFunc(2000, hideMessage, 0);
+            }
+            else if (currentMode == VERTICE)
+            {
+                showMessage = VERTCIE_LOG;
+                isDrawingPolygon = 0;
+                glutTimerFunc(2000, hideMessage, 0);
+            }
+            else if (currentMode == LINE)
+            {
+                showMessage = LINE_LOG;
+                isDrawingPolygon = 0;
+                glutTimerFunc(2000, hideMessage, 0);
+            }
+        }
+        break;
+
+    case JOYSTICK_R1: // R1
+        if (buttonMask != previousButtonMask)
+        {
+            if (currentTransform == SHEAR)
+                currentTransform = NONE_TRANSFORMER;
+            else
+                currentTransform++;
+            setCatState(currentTransform);
+        }
+        break;
+
+    case JOYSTICK_L2:
+        break; // L2
+
+    case JOYSTICK_R2:
+        if (currentMode == POLYGON && isDrawingPolygon)
+        {
+            meshes[meshCount++] = tempMesh;
+            tempMesh.numberPoints = 0;
+            isDrawingPolygon = 0;
+            printf("Poligono fechado e armazenado.\n");
+        }
+        break; // R2
+
+    case JOYSTICK_START:
+        break; // Share
+
+    case JOYSTICK_OPT:
+        break; // Options
+
+    case JOYSTICK_L3:
+        if (buttonMask != previousButtonMask)
+        {
+            if (isSelected)
+            {
+                setCatState(CAT_IDLE);
+                IdSelectedPoint = -1;
+                IdSelectedLine = -1;
+                IdSelectedPolygon = -1;
+                isSelected = 0;
+                currentTransform = NONE_TRANSFORMER;
+                printf("Selecao removida.\n");
+            }
+        }
+        break; // L3
+
+    case JOYSTICK_R3:
+        if (currentMode == POLYGON && isDrawingPolygon)
+        {
+            meshes[meshCount++] = tempMesh;
+            tempMesh.numberPoints = 0;
+            isDrawingPolygon = 0;
+        }
+        break; // R3
+
+    case JOYSTICK_ICON_BUTTON: // PS
+        exit(0);
+        break;
+
+    case JOYSTICK_TOUCH: // Touchpad
+        showMessage = IN_CONCERT;
+        glutTimerFunc(2000, hideMessage, 0);
+        break;
+
+    default:
+        break;
+    }
+    glutPostRedisplay();
+}
+```
+
+**Descrição:**
+- Permite desenhar pontos, linhas e polígonos usando o joystick.
+- Suporta seleção e transformação (translação, rotação, escala, reflexão, cisalhamento) de objetos.
+- Permite salvar/carregar objetos, deletar, alternar modos e manipular animações.
+- Os botões do joystick são mapeados para diferentes ações no editor gráfico.
+
+Utilize essa função para integrar o controle via joystick ao seu editor de gráficos em OpenGL.
+## 🖱️ Funções de Manipulação de Janela e Mouse
+
+### Função `reshape`
+
+Responsável por ajustar o viewport e a projeção quando a janela é redimensionada.
+
+```c
+void reshape(int width, int height)
+{
+    if (height == 0)
+        height = 1;
+    glViewport(0, 0, width, height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluOrtho2D(0, width, 0, height);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+}
+```
+
+---
+
+### Função `mouse`
+
+Gerencia os eventos do mouse para desenhar, selecionar e transformar objetos.
+
+```c
+void mouse(int button, int state, int x, int y)
+{
+    int *window = windowSize();
+    int normX = x;
+    int normY = window[1] - y;
+
+    if (button == GLUT_LEFT_BUTTON)
+    {
+        if (state == GLUT_DOWN)
+        {
+            lastMousePos.x = normX;
+            lastMousePos.y = normY;
+
+            switch (currentMode)
+            {
+            case VERTICE:
+                points[pointCount++] = (Point){normX, normY};
+                printf("Ponto criado: (%d, %d) - Tipo: Vertice\n", normX, normY);
+                break;
+
+            case LINE:
+                tempLine.init = (Point){normX, normY};
+                isDrawing = 1;
+                printf("Inicio da linha: (%d, %d) - Tipo: Linha\n", normX, normY);
+                break;
+
+            case POLYGON:
+                if (isDrawingPolygon && tempMesh.numberPoints < MAX_POLYGON_POINTS)
+                {
+                    tempMesh.vertices[tempMesh.numberPoints++] = (Point){normX, normY};
+                    printf("Ponto do poligono: (%d, %d) - Tipo: Poligono\n", normX, normY);
+                }
+                break;
+
+            case SELECTION:
+                IdSelectedPoint = -1;
+                IdSelectedLine = -1;
+                IdSelectedPolygon = -1;
+                isSelected = 0;
+                IdSelectedPoint = selectPoint(normX, normY, pointCount, points);
+
+                if (IdSelectedPoint >= 0)
+                {
+                    isSelected = 1;
+                    printf("Ponto selecionado: ID %d\n", IdSelectedPoint);
+                }
+                else
+                {
+                    IdSelectedLine = selectLine(normX, normY, lineCount, lines);
+
+                    if (IdSelectedLine >= 0)
+                    {
+                        isSelected = 1;
+                        printf("Linha selecionada: ID %d\n", IdSelectedLine);
+                    }
+                    else
+                    {
+                        IdSelectedPolygon = selectPolygon(normX, normY, meshCount, meshes);
+
+                        if (IdSelectedPolygon >= 0)
+                        {
+                            isSelected = 1;
+                            printf("Poligono selecionado: ID %d\n", IdSelectedPolygon);
+                        }
+                    }
+                }
+
+                if (isSelected)
+                {
+                    if (IdSelectedPoint >= 0)
+                    {
+                        referencePoint = points[IdSelectedPoint];
+                    }
+                    else if (IdSelectedLine >= 0)
+                    {
+                        referencePoint = calculateLineCenter(lines[IdSelectedLine]);
+                    }
+                    else if (IdSelectedPolygon >= 0)
+                    {
+                        referencePoint = calculatePolygonCenter(meshes[IdSelectedPolygon]);
+                    }
+                }
+                break;
+            }
+        }
+        else if (state == GLUT_UP)
+        {
+            if (currentMode == LINE && isDrawing)
+            {
+                tempLine.end = (Point){normX, normY};
+                lines[lineCount++] = tempLine;
+                isDrawing = 0;
+                printf("Fim da linha: (%d, %d) - Tipo: Linha\n", normX, normY);
+            }
+        }
+    }
+    else if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN)
+    {
+        if (currentMode == POLYGON && isDrawingPolygon)
+        {
+            meshes[meshCount++] = tempMesh;
+            tempMesh.numberPoints = 0;
+            isDrawingPolygon = 0;
+            printf("Poligono fechado e armazenado.\n");
+        }
+        else if (isSelected)
+        {
+            IdSelectedPoint = -1;
+            IdSelectedLine = -1;
+            IdSelectedPolygon = -1;
+            isSelected = 0;
+            currentTransform = NONE_TRANSFORMER;
+            printf("Selecao removida.\n");
+        }
+    }
+    else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN && isSelected)
+    {
+        currentTransform = (currentTransform + 1) % 5;
+
+        switch (currentTransform)
+        {
+        case TRANSLATE:
+            printf("Modo: Translacao\n");
+            break;
+        case ROTATE:
+            printf("Modo: Rotacao\n");
+            break;
+        case SCALE:
+            printf("Modo: Escala\n");
+            break;
+        case MIRROR:
+            printf("Modo: Reflexao\n");
+            break;
+        case SHEAR:
+            printf("Modo: Cisalhamento\n");
+            break;
+        }
+    }
+    else if (button == 3 && isSelected)
+    {
+        switch (currentTransform)
+        {
+        case SCALE:
+            scaleFactorX *= 1.1f;
+            scaleFactorY *= 1.1f;
+
+            if (IdSelectedLine >= 0)
+            {
+                scaleLine(IdSelectedLine, 1.1f, 1.1f, lines);
+            }
+            else if (IdSelectedPolygon >= 0)
+            {
+                scalePolygon(IdSelectedPolygon, 1.1f, 1.1f, meshes);
+            }
+            break;
+        case ROTATE:
+            rotationAngle += 5.0f;
+
+            if (IdSelectedPoint >= 0)
+            {
+                rotatePoint(IdSelectedPoint, 5.0f, points);
+            }
+            else if (IdSelectedLine >= 0)
+            {
+                rotateLine(IdSelectedLine, 5.0f, lines);
+            }
+            else if (IdSelectedPolygon >= 0)
+            {
+                rotatePolygon(IdSelectedPolygon, 5.0f, meshes);
+            }
+            break;
+        }
+    }
+    else if (button == 4 && isSelected)
+    {
+        switch (currentTransform)
+        {
+        case SCALE:
+            scaleFactorX *= 0.9f;
+            scaleFactorY *= 0.9f;
+
+            if (IdSelectedLine >= 0)
+            {
+                scaleLine(IdSelectedLine, 0.9f, 0.9f, lines);
+            }
+            else if (IdSelectedPolygon >= 0)
+            {
+                scalePolygon(IdSelectedPolygon, 0.9f, 0.9f, meshes);
+            }
+            break;
+        case ROTATE:
+            rotationAngle -= 5.0f;
+
+            if (IdSelectedPoint >= 0)
+            {
+                rotatePoint(IdSelectedPoint, -5.0f, points);
+            }
+            else if (IdSelectedLine >= 0)
+            {
+                rotateLine(IdSelectedLine, -5.0f, lines);
+            }
+            else if (IdSelectedPolygon >= 0)
+            {
+                rotatePolygon(IdSelectedPolygon, -5.0f, meshes);
+            }
+            break;
+        }
+    }
+
+    glutPostRedisplay();
+}
+```
+
+---
+
+Essas funções permitem manipular a janela e interagir com os objetos gráficos usando o mouse, incluindo criação, seleção e transformação de pontos, linhas e polígonos.
+
+## 📸 Função para Captura de Tela (Screenshot BMP)
+
+Abaixo está a função responsável por capturar a tela do editor gráfico e salvar como uma imagem no formato BMP. Ela utiliza OpenGL para ler os pixels da janela e grava o arquivo no disco.
+
+```c
+void saveScreenshotBMP(const char *filename, int width, int height)
+{
+    FILE *file = fopen(filename, "wb");
+    if (!file)
+    {
+        printf("Erro ao abrir o arquivo para salvar.\n");
+        return;
+    }
+
+    BMPHeader bmpHeader = {{'B', 'M'}, 54 + 3 * width * height, 0, 0, 54};
+    BMPInfoHeader bmpInfoHeader = {
+        40, width, -height, 1, 24, 0, 3 * width * height, 2835, 2835, 0, 0};
+
+    fwrite(&bmpHeader, sizeof(BMPHeader), 1, file);
+    fwrite(&bmpInfoHeader, sizeof(BMPInfoHeader), 1, file);
+
+    GLubyte *pixels = (GLubyte *)malloc(3 * width * height);
+    if (!pixels)
+    {
+        printf("Erro ao alocar memoria.\n");
+        fclose(file);
+        return;
+    }
+
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+
+    fwrite(pixels, 3, width * height, file);
+
+    free(pixels);
+    fclose(file);
+    printf("Captura de tela salva como %s\n", filename);
+}
+```
+
+**Descrição:**
+- Abre um arquivo BMP para escrita binária.
+- Preenche os cabeçalhos BMP (`BMPHeader` e `BMPInfoHeader`).
+- Lê os pixels da tela usando `glReadPixels`.
+- Escreve os dados de imagem no arquivo.
+- Libera a memória e fecha o arquivo.
+
+Utilize esta função para salvar uma captura do seu trabalho no editor gráfico. O arquivo será salvo no caminho e nome especificados em `filename`.
+
+
+
+## 🖱️ Funções de Manipulação de Movimento e Teclas Especiais
+
+A seguir estão as funções responsáveis por manipular o movimento do mouse (`motion`) e as teclas especiais do teclado (`specialKeys`). Elas permitem desenhar, mover e transformar objetos interativamente no editor gráfico.
+
+### Função `motion`
+
+Esta função é chamada quando o mouse é movido com um botão pressionado. Ela atualiza a posição de linhas em desenho, vértices de polígonos ou move objetos selecionados durante a translação.
+
+```c
+void motion(int x, int y)
+{
+    int *window = windowSize();
+    int normX = x;
+    int normY = window[1] - y;
+
+    switch (currentMode)
+    {
+    case LINE:
+        if (isDrawing)
+        {
+            tempLine.end = (Point){normX, normY};
+        }
+        break;
+    case POLYGON:
+        if (isDrawingPolygon && tempMesh.numberPoints > 0)
+        {
+            tempMesh.vertices[tempMesh.numberPoints - 1] = (Point){normX, normY};
+        }
+        break;
+    case SELECTION:
+        if (isSelected && currentTransform == TRANSLATE)
+        {
+            float dx = normX - lastMousePos.x;
+            float dy = normY - lastMousePos.y;
+
+            if (IdSelectedPoint >= 0)
+            {
+                translatePoint(IdSelectedPoint, dx, dy, points);
+            }
+            else if (IdSelectedLine >= 0)
+            {
+                translateLine(IdSelectedLine, dx, dy, lines);
+            }
+            else if (IdSelectedPolygon >= 0)
+            {
+                translatePolygon(IdSelectedPolygon, dx, dy, meshes);
+            }
+
+            lastMousePos.x = normX;
+            lastMousePos.y = normY;
+        }
+        break;
+    default:
+        break;
+    }
+
+    glutPostRedisplay();
+}
+```
+
+---
+
+### Função `specialKeys`
+
+Esta função trata as teclas especiais do teclado (setas) para mover ou cisalhar objetos selecionados. O comportamento depende do modo de transformação ativo e se a tecla Shift está pressionada.
+
+```c
+void specialKeys(int key, int x, int y)
+{
+    float step = 5.0f;
+    int shiftPressed = glutGetModifiers() & GLUT_ACTIVE_SHIFT;
+
+    if (isSelected)
+    {
+        switch (key)
+        {
+        case GLUT_KEY_UP:
+            if (currentTransform == TRANSLATE)
+            {
+                if (IdSelectedPoint >= 0)
+                {
+                    translatePoint(IdSelectedPoint, 0, step, points);
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    translateLine(IdSelectedLine, 0, step, lines);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    translatePolygon(IdSelectedPolygon, 0, step, meshes);
+                }
+            }
+            else if (currentTransform == SHEAR && shiftPressed)
+            {
+                shearFactorY += 0.1f;
+
+                if (IdSelectedPoint >= 0)
+                {
+                    shearPoint(IdSelectedPoint, 0, 0.1f, points);
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    shearLine(IdSelectedLine, 0, 0.1f, lines);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    shearPolygon(IdSelectedPolygon, 0, 0.1f, meshes);
+                }
+            }
+            break;
+
+        case GLUT_KEY_DOWN:
+            if (currentTransform == TRANSLATE)
+            {
+                if (IdSelectedPoint >= 0)
+                {
+                    translatePoint(IdSelectedPoint, 0, -step, points);
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    translateLine(IdSelectedLine, 0, -step, lines);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    translatePolygon(IdSelectedPolygon, 0, -step, meshes);
+                }
+            }
+            else if (currentTransform == SHEAR && shiftPressed)
+            {
+                shearFactorY -= 0.1f;
+
+                if (IdSelectedPoint >= 0)
+                {
+                    shearPoint(IdSelectedPoint, 0, -0.1f, points);
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    shearLine(IdSelectedLine, 0, -0.1f, lines);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    shearPolygon(IdSelectedPolygon, 0, -0.1f, meshes);
+                }
+            }
+            break;
+
+        case GLUT_KEY_LEFT:
+            if (currentTransform == TRANSLATE)
+            {
+                if (IdSelectedPoint >= 0)
+                {
+                    translatePoint(IdSelectedPoint, -step, 0, points);
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    translateLine(IdSelectedLine, -step, 0, lines);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    translatePolygon(IdSelectedPolygon, -step, 0, meshes);
+                }
+            }
+            else if (currentTransform == SHEAR && shiftPressed)
+            {
+                shearFactorX -= 0.1f;
+
+                if (IdSelectedPoint >= 0)
+                {
+                    shearPoint(IdSelectedPoint, -0.1f, 0, points);
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    shearLine(IdSelectedLine, -0.1f, 0, lines);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    shearPolygon(IdSelectedPolygon, -0.1f, 0, meshes);
+                }
+            }
+            break;
+
+        case GLUT_KEY_RIGHT:
+            if (currentTransform == TRANSLATE)
+            {
+                if (IdSelectedPoint >= 0)
+                {
+                    translatePoint(IdSelectedPoint, step, 0, points);
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    translateLine(IdSelectedLine, step, 0, lines);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    translatePolygon(IdSelectedPolygon, step, 0, meshes);
+                }
+            }
+            else if (currentTransform == SHEAR && shiftPressed)
+            {
+                shearFactorX += 0.1f;
+
+                if (IdSelectedPoint >= 0)
+                {
+                    shearPoint(IdSelectedPoint, 0.1f, 0, points);
+                }
+                else if (IdSelectedLine >= 0)
+                {
+                    shearLine(IdSelectedLine, 0.1f, 0, lines);
+                }
+                else if (IdSelectedPolygon >= 0)
+                {
+                    shearPolygon(IdSelectedPolygon, 0.1f, 0, meshes);
+                }
+            }
+            break;
+        }
+    }
+    glutPostRedisplay();
+}
+```
+
+---
+
+Essas funções proporcionam uma experiência interativa para manipulação dos objetos gráficos, permitindo desenhar, mover e transformar elementos usando o mouse e o teclado.
+
 
 
 ## 🛠️ Tecnologias Utilizadas
