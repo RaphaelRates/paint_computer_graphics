@@ -24,7 +24,7 @@
 #define JOYSTICK_ICON_BUTTON 4096
 #define JOYSTICK_TOUCH 8192
 
-typedef struct
+typedef structk
 {
     float x, y;
 } Point;
